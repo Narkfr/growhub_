@@ -23,7 +23,6 @@ class ClimateSensor:
                 self.sensor.measure()
                 temp = self.sensor.temperature()
                 hum = self.sensor.humidity()
-                print(f"Raw DHT11 readings: temp={temp}, hum={hum}")
 
                 # Validate temperature is a number
                 if not isinstance(temp, (int, float)):  # noqa: UP038
