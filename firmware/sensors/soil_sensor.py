@@ -13,7 +13,8 @@ class SoilSensor:
             self.dry_value = dry_value
             self.wet_value = wet_value
         except (ValueError, OSError) as e:
-            raise ValueError(f"Failed to initialize sensor on pin {pin_number}: {e}")
+            raise ValueError(f"Failed to initialize sensor on \
+                             pin {pin_number}: {e}") from e
 
     def read_raw(self):
         """Returns the raw 16-bit value (0-65535)."""
@@ -25,18 +26,20 @@ class SoilSensor:
                 <= max(self.wet_value, self.dry_value)
             ):
                 raise ValueError(
-                    f"Raw value {raw_value} is outside calibration range [{min(self.wet_value, self.dry_value)}, {max(self.wet_value, self.dry_value)}]"
+                    f"Raw value {raw_value} is outside calibration range [ \
+                    {min(self.wet_value, self.dry_value)}, \
+                    {max(self.wet_value, self.dry_value)}]"
                 )
             return raw_value
         except OSError as e:
-            raise OSError(f"Failed to read ADC: {e}")
+            raise OSError(f"Failed to read ADC: {e}") from e
 
     def get_percentage_from_raw(self, raw_value):
         """
         Pure logic: Converts a raw ADC value to a percentage.
         Formula: ((raw - dry) / (wet - dry)) * 100
         """
-        if not isinstance(raw_value, (int, float)):
+        if not isinstance(raw_value, int | float):
             raise TypeError(f"raw_value must be numeric, got {type(raw_value)}")
 
         if self.dry_value == self.wet_value:
@@ -56,4 +59,4 @@ class SoilSensor:
         try:
             return self.get_percentage_from_raw(self.read_raw())
         except (OSError, TypeError) as e:
-            raise RuntimeError(f"Failed to read sensor percentage: {e}")
+            raise RuntimeError(f"Failed to read sensor percentage: {e}") from e

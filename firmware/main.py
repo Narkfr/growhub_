@@ -1,5 +1,6 @@
-from machine import Pin
 import time
+
+from machine import Pin
 
 # Internal LED on Pico W
 led = Pin("LED", Pin.OUT)

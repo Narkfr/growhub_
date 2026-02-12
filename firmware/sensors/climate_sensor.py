@@ -1,5 +1,6 @@
-import dht
 import time
+
+import dht
 from machine import Pin
 
 
@@ -24,11 +25,11 @@ class ClimateSensor:
                 hum = self.sensor.humidity()
 
                 # Validate temperature is a number
-                if not isinstance(temp, (int, float)):
+                if not isinstance(temp, int | float):
                     raise ValueError(f"Invalid temperature: {temp}")
 
                 # Validate humidity is between 0 and 100
-                if not isinstance(hum, (int, float)) or not (0 <= hum <= 100):
+                if not isinstance(hum, int | float) or not (0 <= hum <= 100):
                     raise ValueError(f"Invalid humidity: {hum}")
 
                 return temp, hum

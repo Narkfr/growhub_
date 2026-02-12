@@ -4,10 +4,13 @@ firmware/__init__.py
 firmware/boot.py
 firmware/config_culture.py
 firmware/main.py
+firmware/sensors/__init__.py
+firmware/sensors/climate_sensor.py
+firmware/sensors/soil_sensor.py
 firmware/src/__init__.py
 firmware/src/network.py
-firmware/src/sensors.py
 growhub.egg-info/PKG-INFO
 growhub.egg-info/SOURCES.txt
 growhub.egg-info/dependency_links.txt
+growhub.egg-info/requires.txt
 growhub.egg-info/top_level.txt

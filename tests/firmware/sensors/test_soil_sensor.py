@@ -1,11 +1,11 @@
 import sys
-import pytest
-
 from unittest.mock import MagicMock
+
+import pytest
 
 mock_machine = MagicMock()
 sys.modules["machine"] = mock_machine
-from firmware.sensors.soil_sensor import SoilSensor
+from firmware.sensors.soil_sensor import SoilSensor  # noqa: E402
 
 # Setup the mock behavior for ADC
 # We want read_u16 to return a specific value when we decide

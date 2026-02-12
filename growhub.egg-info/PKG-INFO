@@ -1,3 +1,7 @@
 Metadata-Version: 2.4
 Name: growhub
 Version: 0.1.0
+Summary: GrowHub IoT System - Monitoring and Automation
+Requires-Dist: pytest
+Requires-Dist: ruff
+Requires-Dist: pre-commit
