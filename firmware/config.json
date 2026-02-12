@@ -8,7 +8,7 @@
         {"id": "GrowLampButton", "pin": 15, "target": "GrowLamp"}
     ],
     "sensors": [
-        { "id": "SoilSensor", "type": "csmsv2", "pin": 26, "calibration": {"dry": 60000, "wet": 20000} },
-        { "id": "ClimateSensor", "type": "dht11", "pin": 27 }
+        { "id": "SoilSensor", "type": "csmsv2", "pin": 26, "calibration": {"dry": 49000, "wet": 18308} },
+        { "id": "ClimateSensor", "type": "dht11", "pin": 15 }
     ]
 }
