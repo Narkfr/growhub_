@@ -1,13 +1,13 @@
 import sys
 from unittest.mock import MagicMock
 
-import pytest
+import pytest  # type: ignore
 
 mock_machine = MagicMock()
 mock_dht = MagicMock()
 sys.modules["dht"] = mock_dht
 sys.modules["machine"] = mock_machine
-from firmware.sensors.climate_sensor import ClimateSensor  # noqa: E402
+from firmware.src.sensors.climate_sensor import ClimateSensor  # noqa: E402
 
 
 @pytest.fixture

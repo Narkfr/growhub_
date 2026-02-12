@@ -1,20 +1,23 @@
-import time
+from src.actuators import Actuator, ManualButton, load_config
 
-from machine import Pin
+# Initializing hardware from config
+config = load_config("config.json")
 
-# Internal LED on Pico W
-led = Pin("LED", Pin.OUT)
+# Create dictionaries to store instances
+actuators = {}
+for item in config["actuators"]:
+    actuators[item["id"]] = Actuator(item["pin"], item["id"])
 
-print("--- Smart Greenhouse Pico W Starting ---")
+buttons = []
+for item in config["buttons"]:
+    btn = ManualButton(item["pin"], item["id"], item["target"])
+    buttons.append(btn)
 
-# Blink 3 times to signal startup
-for _ in range(3):
-    led.on()
-    time.sleep(0.1)
-    led.off()
-    time.sleep(0.1)
-
+# Main loop logic
 while True:
-    print("Heartbeat: PiPico is alive and syncing.")
-    led.toggle()
-    time.sleep(5)
+    for btn in buttons:
+        if btn.is_pressed():
+            # Control the linked actuator defined in config
+            target = actuators.get(btn.target_id)
+            if target:
+                target.toggle()
