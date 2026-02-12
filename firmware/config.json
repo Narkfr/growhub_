@@ -5,7 +5,7 @@
     ],
     "buttons": [
         {"id": "WaterPumpButton", "pin": 14, "target": "WaterPump"},
-        {"id": "GrowLampButton", "pin": 15, "target": "GrowLamp"}
+        {"id": "GrowLampButton", "pin": 13, "target": "GrowLamp"}
     ],
     "sensors": [
         { "id": "SoilSensor", "type": "csmsv2", "pin": 26, "calibration": {"dry": 49000, "wet": 18308} },
