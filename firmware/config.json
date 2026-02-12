@@ -1,0 +1,14 @@
+{
+    "actuators": [
+        {"id": "WaterPump", "pin": 18},
+        {"id": "GrowLamp", "pin": 19}
+    ],
+    "buttons": [
+        {"id": "WaterPumpButton", "pin": 14, "target": "WaterPump"},
+        {"id": "GrowLampButton", "pin": 15, "target": "GrowLamp"}
+    ],
+    "sensors": [
+        { "id": "SoilSensor", "type": "csmsv2", "pin": 26, "calibration": {"dry": 60000, "wet": 20000} },
+        { "id": "ClimateSensor", "type": "dht11", "pin": 27 }
+    ]
+}
