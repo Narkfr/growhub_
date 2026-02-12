@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "growhub"
+version = "0.1.0"
+description = "GrowHub IoT System - Monitoring and Automation"
+dependencies = [
+    "pytest",
+    "ruff",
+    "pre-commit",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["firmware*", "gateway*", "dashboard*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+fixable = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["firmware", "gateway", "dashboard"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
