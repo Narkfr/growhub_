@@ -23,9 +23,9 @@ class Actuator:
 
     def toggle(self):
         """Invert the current state of the actuator."""
-        self.pin.value(not self.pin.value())
         print(f"Toggling actuator {self.id} (Pin {self.pin}), \
-              state: {'ON' if self.pin.value() else 'OFF'}")
+            state: {'ON' if self.pin.value() else 'OFF'}")
+        self.pin.value(not self.pin.value())
 
     def is_on(self):
         """Check if the actuator is active."""
