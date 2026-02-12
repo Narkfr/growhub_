@@ -1,6 +1,7 @@
 # This script should be run via the "Run" button in VS Code
-from machine import ADC, Pin
 import time
+
+from machine import ADC, Pin
 
 # Sensor connected to GP26 (ADC0)
 soil_pin = ADC(Pin(26))

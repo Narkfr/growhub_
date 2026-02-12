@@ -3,9 +3,10 @@ import sys
 # Adding src to path so we can import our classes
 sys.path.append("sensors")
 
-from sensors.soil_sensor import SoilSensor  # type: ignore
-from sensors.climate_sensor import ClimateSensor  # type: ignore
 import time
+
+from sensors.climate_sensor import ClimateSensor  # type: ignore
+from sensors.soil_sensor import SoilSensor  # type: ignore
 
 # Update these with YOUR calibration values from the previous step
 DRY_VAL = 48859  # Example

@@ -43,7 +43,7 @@ smart-serre-radis/
 ### 1. Firmware Environment (Pico W)
 * **Runtime**: MicroPython v1.22+.
 * **IDE**: VS Code with the **MicroPico** extension.
-* **Continuous Deployment**: 
+* **Continuous Deployment**:
     * `projectRoot` set to `./firmware`.
     * **Sync-on-Save** enabled: Every file save (Ctrl+S) triggers an automatic synchronization to the Pico's flash memory.
     * **Isolation**: The `tests/` directory is located at the root level to ensure only production code is uploaded to the device.
