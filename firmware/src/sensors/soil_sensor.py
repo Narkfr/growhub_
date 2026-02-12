@@ -39,7 +39,7 @@ class SoilSensor:
         Pure logic: Converts a raw ADC value to a percentage.
         Formula: ((raw - dry) / (wet - dry)) * 100
         """
-        if not isinstance(raw_value, int | float):
+        if not isinstance(raw_value, (int, float)):  # noqa: UP038
             raise TypeError(f"raw_value must be numeric, got {type(raw_value)}")
 
         if self.dry_value == self.wet_value:

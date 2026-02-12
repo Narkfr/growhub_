@@ -23,13 +23,14 @@ class ClimateSensor:
                 self.sensor.measure()
                 temp = self.sensor.temperature()
                 hum = self.sensor.humidity()
+                print(f"Raw DHT11 readings: temp={temp}, hum={hum}")
 
                 # Validate temperature is a number
-                if not isinstance(temp, int | float):
+                if not isinstance(temp, (int, float)):  # noqa: UP038
                     raise ValueError(f"Invalid temperature: {temp}")
 
                 # Validate humidity is between 0 and 100
-                if not isinstance(hum, int | float) or not (0 <= hum <= 100):
+                if not isinstance(hum, (int, float)) or not (0 <= hum <= 100):  # noqa: UP038
                     raise ValueError(f"Invalid humidity: {hum}")
 
                 return temp, hum
