@@ -2,7 +2,7 @@ import json
 import sys
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
-import pytest
+import pytest  # type: ignore
 
 sys.modules["machine"] = MagicMock()
 from firmware.src.actuators import Actuator, ManualButton, load_config  # noqa: E402
