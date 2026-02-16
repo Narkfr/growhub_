@@ -1,17 +1,27 @@
 import asyncio
+import json
 
-from src.actuators import Actuator, ManualButton, load_config
-from src.sensors.climate_sensor import ClimateSensor
-from src.sensors.soil_sensor import SoilSensor
+from src.actuators import Actuator, ManualButton
+from src.sensors.sensor_classes import SENSOR_CLASSES
+
+
+def load_config(file_path):
+    """Load hardware configuration from a JSON file."""
+    with open(file_path) as f:
+        return json.load(f)
+
 
 config = load_config("config.json")
 
-climate = ClimateSensor(pin_number=config["sensors"][1]["pin"])
-soil = SoilSensor(
-    pin_number=config["sensors"][0]["pin"],
-    dry_value=config["sensors"][0]["calibration"]["dry"],
-    wet_value=config["sensors"][0]["calibration"]["wet"],
-)
+sensors = {}
+for item in config["sensors"]:
+    cls = SENSOR_CLASSES.get(item["type"])
+    if cls:
+        args = {"pin_number": item["pin"], "sensor_id": item["id"]}
+        if "calibration" in item:
+            args["calibration"] = item["calibration"]
+
+        sensors[item["id"]] = cls(**args)
 
 actuators = {}
 for item in config["actuators"]:
@@ -38,20 +48,16 @@ async def monitor_buttons():
 
 
 async def read_sensors():
-    """Task to read sensors every 3 seconds (non-blocking)."""
+    """Task to read all registered sensors dynamically."""
     while True:
-        temp, hum = climate.read_data()
-        moisture = soil.read_percentage()
+        data_payload = {}
+        # Iterate over the instances (values), not the keys (strings)
+        for sensor_instance in sensors.values():
+            # Now sensor_instance is the object, and has the .read() method
+            measurements = sensor_instance.read()
+            data_payload[sensor_instance.sensor_id] = measurements
 
-        print("-" * 30)
-        if temp is not None:
-            print(f"Air: {temp}C | {hum}%")
-        else:
-            print("Air: Sensor Error")
-
-        print(f"Soil Moisture: {moisture}%")
-
-        # This sleep is non-blocking! Other tasks continue to run.
+        print(f"Data Collected: {data_payload}")
         await asyncio.sleep(3)
 
 

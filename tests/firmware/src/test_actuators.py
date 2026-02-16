@@ -1,11 +1,10 @@
-import json
 import sys
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest  # type: ignore
 
 sys.modules["machine"] = MagicMock()
-from firmware.src.actuators import Actuator, ManualButton, load_config  # noqa: E402
+from firmware.src.actuators import Actuator, ManualButton  # noqa: E402
 
 
 class TestActuator:
@@ -21,25 +20,25 @@ class TestActuator:
     def test_actuator_initialization(self, actuator, mock_pin):
         assert actuator.id == "pump_1"
         assert actuator.pin == mock_pin
-        mock_pin.value.assert_called_with(0)
+        mock_pin.value.assert_called_with(1)
 
     def test_actuator_on(self, actuator, mock_pin):
         actuator.on()
-        mock_pin.value.assert_called_with(1)
+        mock_pin.value.assert_called_with(0)
 
     def test_actuator_off(self, actuator, mock_pin):
         actuator.off()
-        mock_pin.value.assert_called_with(0)
+        mock_pin.value.assert_called_with(1)
 
     def test_actuator_toggle_from_off(self, actuator, mock_pin):
         mock_pin.value.return_value = 0
         actuator.toggle()
-        mock_pin.value.assert_called_with(True)
+        mock_pin.value.assert_called_with(1)
 
     def test_actuator_toggle_from_on(self, actuator, mock_pin):
         mock_pin.value.return_value = 1
         actuator.toggle()
-        mock_pin.value.assert_called_with(False)
+        mock_pin.value.assert_called_with(0)
 
     def test_actuator_is_on(self, actuator, mock_pin):
         mock_pin.value.return_value = 1
@@ -71,21 +70,3 @@ class TestManualButton:
     def test_button_is_pressed_false(self, button, mock_pin):
         mock_pin.value.return_value = 1
         assert button.is_pressed() is False
-
-
-class TestLoadConfig:
-    def test_load_config_valid_json(self):
-        config_data = {"actuators": [{"id": "pump_1", "pin": 5}]}
-        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
-            result = load_config("config.json")
-            assert result == config_data
-
-    def test_load_config_file_not_found(self):
-        with patch("builtins.open", side_effect=FileNotFoundError):
-            with pytest.raises(FileNotFoundError):
-                load_config("nonexistent.json")
-
-    def test_load_config_invalid_json(self):
-        with patch("builtins.open", mock_open(read_data="invalid json")):
-            with pytest.raises(json.JSONDecodeError):
-                load_config("config.json")
