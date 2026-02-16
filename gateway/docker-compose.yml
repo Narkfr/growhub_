@@ -1,0 +1,12 @@
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: growhub-mqtt
+    restart: always
+    ports:
+      - "1883:1883" # Standard MQTT port
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    user: "${UID}:${GID}" # Run with current user permissions
