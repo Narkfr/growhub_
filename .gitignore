@@ -12,3 +12,6 @@ __pycache__/
 
 # Docker / DB
 gateway/influxdb/data
+
+# Secrets
+gateway/.env
