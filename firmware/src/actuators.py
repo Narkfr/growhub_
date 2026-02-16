@@ -1,5 +1,3 @@
-import json
-
 from machine import Pin
 
 
@@ -14,12 +12,12 @@ class Actuator:
     def on(self):
         """Enable the actuator."""
         print(f"Turning ON actuator {self.id} (Pin {self.pin})")
-        self.pin.value(1)
+        self.pin.value(0)
 
     def off(self):
         """Disable the actuator."""
         print(f"Turning OFF actuator {self.id} (Pin {self.pin})")
-        self.pin.value(0)
+        self.pin.value(1)
 
     def toggle(self):
         """Invert the current state of the actuator."""
@@ -44,9 +42,3 @@ class ManualButton:
     def is_pressed(self):
         """Check button state (active low)."""
         return self.pin.value() == 0
-
-
-def load_config(file_path):
-    """Load hardware configuration from a JSON file."""
-    with open(file_path) as f:
-        return json.load(f)
