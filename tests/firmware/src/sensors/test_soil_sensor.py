@@ -25,8 +25,8 @@ def sensor():
 class TestSoilSensor:
     def test_init_create_sensor(self, sensor):
         mock_machine.Pin.assert_called_with(26)
-        assert sensor.dry_value == dry
-        assert sensor.wet_value == wet
+        assert sensor.calibration["dry"] == dry
+        assert sensor.calibration["wet"] == wet
 
     @pytest.mark.parametrize(
         "expected_16bit",
