@@ -1,4 +1,5 @@
 {
+    "client_id": "GrowHubClient",
     "actuators": [
         {"id": "WaterPump", "pin": 18},
         {"id": "GrowLamp", "pin": 19}
