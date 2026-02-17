@@ -4,6 +4,9 @@ from machine import Pin
 class Actuator:
     """Generic ON/OFF device controlled via GPIO."""
 
+    # TODO: Add parameters for different actuator types
+    # (e.g., PWM for dimmers, etc.) in the future.
+
     def __init__(self, pin_number, actuator_id):
         self.id = actuator_id
         self.pin = Pin(pin_number, Pin.OUT)
@@ -27,13 +30,15 @@ class Actuator:
 
     def is_on(self):
         """Check if the actuator is active."""
-        print(f"Actuator {self.id} state: {'ON' if self.pin.value() else 'OFF'}")
-        return bool(self.pin.value())
+        print(f"Actuator {self.id} state: {'OFF' if self.pin.value() else 'ON'}")
+        return not bool(self.pin.value())
 
 
 class ManualButton:
     """Input handler for a physical push button."""
 
+    # TODO: Define button in config with target actuator
+    # and possibly debounce settings in the future.
     def __init__(self, pin_number, button_id, target_id):
         self.id = button_id
         self.target_id = target_id  # The ID of the actuator it controls

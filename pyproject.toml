@@ -19,6 +19,7 @@ include = ["firmware*", "gateway*", "dashboard*"]
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+extend-exclude = ["firmware/lib/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
