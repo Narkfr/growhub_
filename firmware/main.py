@@ -7,6 +7,7 @@ except ImportError:
     print("Error: secrets.py is missing!")
     secrets = {}
 
+from constants import ALLOWED_ACTUATOR_ACTIONS, STATE_MAP
 from src.actuators import Actuator, ManualButton
 from src.mqtt_manager import MqttManager
 from src.network_manager import NetworkManager
@@ -20,14 +21,60 @@ def load_config(file_path):
 
 
 config = load_config("config.json")
+CLIENT_ID = config["client_id"]
+
+
+def on_message_received(topic, msg):
+    """
+    Callback triggered by MqttManager.
+    Topic expected: client_id/category/target_id/action
+    """
+    try:
+        topic_str = topic.decode()
+        msg_str = msg.decode()
+        print(
+            f"Received MQTT message on topic: {topic_str} with payload: {msg.decode()}"
+        )
+        parts = topic_str.split("/")
+        if len(parts) < 4:
+            return
+
+        category = parts[1]
+        target_id = parts[2]
+        action = msg_str
+
+        if category == "actuators":
+            target = actuators.get(target_id)
+            if target and action in ALLOWED_ACTUATOR_ACTIONS:
+                method = getattr(target, action)
+                method()
+                mqtt_mgr.publish(
+                    f"{CLIENT_ID}/data",
+                    {
+                        "actuator": target_id,
+                        "data": {"state": STATE_MAP[target.is_on()]},
+                    },
+                )
+
+        elif category == "sensors" and action == "read":
+            target = sensors.get(target_id)
+            if target:
+                mqtt_mgr.publish(
+                    f"{CLIENT_ID}/data", {"sensor": target_id, "data": target.read()}
+                )
+
+    except Exception as e:
+        print(f"Routing error: {e}")
+
 
 wifi_mgr = NetworkManager(secrets.get("WIFI_SSID"), secrets.get("WIFI_PASSWORD"))
 mqtt_mgr = MqttManager(
-    client_id=config["client_id"],
+    client_id=CLIENT_ID,
     broker_ip=secrets.get("MQTT_BROKER"),
     user=secrets.get("MQTT_USER"),
     password=secrets.get("MQTT_PASSWORD"),
 )
+mqtt_mgr.set_callback(on_message_received)
 
 sensors = {}
 for item in config["sensors"]:
@@ -79,6 +126,14 @@ async def read_sensors():
         await asyncio.sleep(3)
 
 
+async def mqtt_listen_task():
+    """Polls the broker for incoming commands."""
+    while True:
+        if wifi_mgr.wlan.isconnected():
+            mqtt_mgr.check_msg()
+        await asyncio.sleep(0.1)
+
+
 async def telemetry_task():
     """Reads sensors and publishes to MQTT every 10 seconds."""
     while True:
@@ -94,7 +149,7 @@ async def telemetry_task():
         data_payload["actuators"] = actuators_state
 
         if wifi_mgr.wlan.isconnected():
-            mqtt_mgr.publish("growhub/telemetry", data_payload)
+            mqtt_mgr.publish(f"{CLIENT_ID}/telemetry", data_payload)
             print(f"Published: {data_payload}")
 
         await asyncio.sleep(10)
@@ -109,7 +164,12 @@ async def main():
         await mqtt_mgr.connect()
 
     # 3. Start all concurrent tasks
-    await asyncio.gather(monitor_buttons(), telemetry_task(), wifi_mgr.keep_connected())
+    await asyncio.gather(
+        monitor_buttons(),
+        telemetry_task(),
+        mqtt_listen_task(),
+        wifi_mgr.keep_connected(),
+    )
 
 
 # Start the event loop

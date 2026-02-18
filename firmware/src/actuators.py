@@ -30,7 +30,6 @@ class Actuator:
 
     def is_on(self):
         """Check if the actuator is active."""
-        print(f"Actuator {self.id} state: {'OFF' if self.pin.value() else 'ON'}")
         return not bool(self.pin.value())
 
 
