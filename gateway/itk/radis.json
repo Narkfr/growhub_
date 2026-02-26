@@ -1,0 +1,29 @@
+{
+    "name": "Radis 18 jours",
+    "phases": [
+        {
+            "name": "Semis",
+            "order": 1,
+            "duration": 4,
+            "settings": {
+                "temp_min": 18,
+                "temp_max": 22,
+                "moisture_target": 70,
+                "light_hours": 0,
+                "light_start_hour": 8
+            }
+        },
+        {
+            "name": "Croissance",
+            "order": 2,
+            "duration": 20,
+            "settings": {
+                "temp_min": 15,
+                "temp_max": 18,
+                "moisture_target": 50,
+                "light_hours": 12,
+                "light_start_hour": 7
+            }
+        }
+    ]
+}
