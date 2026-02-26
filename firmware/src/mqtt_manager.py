@@ -23,13 +23,13 @@ class MqttManager:
         """Connect to the MQTT broker."""
         try:
             self.client.connect()
-            # TODO: Consider subscribing to something related to config.json
+            # TODO: Consider subscribing to something related to manifest.py
             # in the future for dynamic updates
             self.client.subscribe(f"{self.client.client_id}/actuators/+/action")
             self.client.subscribe(f"{self.client.client_id}/sensors/+/action")
             print(
                 f"Connected to MQTT Broker at {self.broker_ip} and subscribed \
-                    to {self.client.client_id}"
+                to {self.client.client_id}"
             )
             return True
         except Exception as e:

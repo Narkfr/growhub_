@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest  # type: ignore
 
 sys.modules["machine"] = MagicMock()
-from firmware.src.actuators import Actuator, ManualButton  # noqa: E402
+from firmware.src.actuators.base import BaseActuator, ManualButton  # noqa: E402
 
 
 class TestActuator:
@@ -14,8 +14,8 @@ class TestActuator:
 
     @pytest.fixture
     def actuator(self, mock_pin):
-        with patch("firmware.src.actuators.Pin", return_value=mock_pin):
-            return Actuator(pin_number=5, actuator_id="pump_1")
+        with patch("firmware.src.actuators.base.Pin", return_value=mock_pin):
+            return BaseActuator(pin_number=5, actuator_id="pump_1")
 
     def test_actuator_initialization(self, actuator, mock_pin):
         assert actuator.id == "pump_1"
@@ -42,10 +42,17 @@ class TestActuator:
 
     def test_actuator_is_on(self, actuator, mock_pin):
         mock_pin.value.return_value = 1
-        assert actuator.is_on() is True
+        assert actuator.is_on() is False
 
         mock_pin.value.return_value = 0
-        assert actuator.is_on() is False
+        assert actuator.is_on() is True
+
+    def test_human_state(self, actuator, mock_pin):
+        mock_pin.value.return_value = 1
+        assert actuator.human_state() == "OFF"
+
+        mock_pin.value.return_value = 0
+        assert actuator.human_state() == "ON"
 
 
 class TestManualButton:
@@ -55,7 +62,7 @@ class TestManualButton:
 
     @pytest.fixture
     def button(self, mock_pin):
-        with patch("firmware.src.actuators.Pin", return_value=mock_pin):
+        with patch("firmware.src.actuators.base.Pin", return_value=mock_pin):
             return ManualButton(pin_number=12, button_id="btn_1", target_id="pump_1")
 
     def test_button_initialization(self, button, mock_pin):

@@ -1,0 +1,145 @@
+import asyncio
+
+from constants import ALLOWED_ACTUATOR_ACTIONS, ALLOWED_SENSOR_ACTIONS
+from src.actuators.base import BaseActuator, ManualButton
+from src.mqtt_manager import MqttManager
+from src.network_manager import NetworkManager
+from src.sensors.sensor_classes import SENSOR_CLASSES
+
+
+class GrowHubController:
+    def __init__(self, manifest, secrets):
+        self.manifest = manifest
+        self.secrets = secrets
+
+        # Managers
+        self.wifi = NetworkManager(
+            secrets.get("WIFI_SSID"), secrets.get("WIFI_PASSWORD")
+        )
+        self.mqtt = MqttManager(
+            client_id=manifest["client_id"],
+            broker_ip=secrets.get("MQTT_BROKER"),
+            user=secrets.get("MQTT_USER"),
+            password=secrets.get("MQTT_PASSWORD"),
+        )
+
+        # Hardware storage
+        self.sensors = {}
+        self.actuators = {}
+        self.buttons = []
+
+        self._setup_hardware()
+        self.mqtt.set_callback(self._on_message)
+
+    def _setup_hardware(self):
+        # Setup Actuators
+        for item in self.manifest["actuators"]:
+            self.actuators[item["id"]] = BaseActuator(item["pin"], item["id"])
+
+        # Setup Sensors
+        for item in self.manifest["sensors"]:
+            cls = SENSOR_CLASSES.get(item["type"])
+            if cls:
+                # Dynamic unpacking for calibration if it exists
+                args = {"pin_number": item["pin"], "sensor_id": item["id"]}
+                if "calibration" in item:
+                    args.update({"calibration": item["calibration"]})
+                self.sensors[item["id"]] = cls(**args)
+
+        # Setup Buttons
+        for item in self.manifest["buttons"]:
+            btn = ManualButton(item["pin"], item["id"], item["target"])
+            self.buttons.append(btn)
+
+    def _on_message(self, topic, msg):
+        """Routing logic using getattr for cleaner execution."""
+        try:
+            parts = topic.decode().split("/")
+            if len(parts) < 4:
+                return
+
+            category, target_id, action = parts[1], parts[2], msg.decode()
+
+            if category == "actuators":
+                target = self.actuators.get(target_id)
+                if (
+                    target
+                    and hasattr(target, action)
+                    and action in ALLOWED_ACTUATOR_ACTIONS
+                ):
+                    getattr(target, action)()
+                    # Send feedback
+                    self.mqtt.publish(
+                        f"{self.manifest['client_id']}/data/{target_id}/state",
+                        {
+                            "actuator": target_id,
+                            "data": {"state": target.human_state()},
+                        },
+                    )
+            elif (
+                category == "sensors"
+                and action == "read"
+                and action in ALLOWED_SENSOR_ACTIONS
+            ):
+                target = self.sensors.get(target_id)
+                if target:
+                    self.mqtt.publish(
+                        f"{self.manifest['client_id']}/data",
+                        {"sensor": target_id, "data": target.read()},
+                    )
+        except Exception as e:
+            print(f"Callback error: {e}")
+
+    async def _telemetry_task(self):
+        while True:
+            if self.wifi.wlan.isconnected():
+                data = {sid: s.read() for sid, s in self.sensors.items()}
+                data["actuators"] = {
+                    aid: "ON" if act.is_on() else "OFF"
+                    for aid, act in self.actuators.items()
+                }
+                self.mqtt.publish(f"{self.manifest['client_id']}/telemetry", data)
+            await asyncio.sleep(1)
+
+    async def _listen_task(self):
+        while True:
+            if self.wifi.wlan.isconnected():
+                self.mqtt.check_msg()
+            await asyncio.sleep(0.1)
+
+    async def _button_task(self):
+        """Task to check buttons frequently (non-blocking)."""
+        while True:
+            for btn in self.buttons:
+                if btn.is_pressed():
+                    target = self.actuators.get(btn.target_id)
+                    if target:
+                        # 1. Action physique
+                        target.toggle()
+
+                        # 2. Feedback MQTT immédiat (pour synchroniser le Dashboard)
+                        self.mqtt.publish(
+                            f"{self.manifest['client_id']}/data",
+                            {
+                                "actuator": btn.target_id,
+                                "data": {"state": target.human_state()},
+                            },
+                        )
+
+                        # Debounce: wait until button is released or small delay
+                        await asyncio.sleep(0.3)
+
+            # Very short sleep to let other tasks run
+            await asyncio.sleep(0.05)
+
+    async def run(self):
+        """Entry point for the async loop."""
+        if await self.wifi.connect():
+            await self.mqtt.connect()
+
+        await asyncio.gather(
+            self._telemetry_task(),
+            self._listen_task(),
+            self._button_task(),
+            self.wifi.keep_connected(),
+        )

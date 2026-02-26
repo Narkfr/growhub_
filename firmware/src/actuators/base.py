@@ -1,7 +1,7 @@
 from machine import Pin
 
 
-class Actuator:
+class BaseActuator:
     """Generic ON/OFF device controlled via GPIO."""
 
     # TODO: Add parameters for different actuator types
@@ -31,6 +31,10 @@ class Actuator:
     def is_on(self):
         """Check if the actuator is active."""
         return not bool(self.pin.value())
+
+    def human_state(self):
+        """Return a human-readable state."""
+        return "ON" if self.is_on() else "OFF"
 
 
 class ManualButton:
