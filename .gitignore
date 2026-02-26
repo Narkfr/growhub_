@@ -16,3 +16,4 @@ gateway/influxdb/data
 # Secrets
 gateway/.env
 firmware/secrets.py
+gateway/mosquitto/config/password_file

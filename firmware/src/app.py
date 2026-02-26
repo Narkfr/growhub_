@@ -76,11 +76,7 @@ class GrowHubController:
                             "data": {"state": target.human_state()},
                         },
                     )
-            elif (
-                category == "sensors"
-                and action == "read"
-                and action in ALLOWED_SENSOR_ACTIONS
-            ):
+            elif category == "sensors" and action in ALLOWED_SENSOR_ACTIONS:
                 target = self.sensors.get(target_id)
                 if target:
                     self.mqtt.publish(
