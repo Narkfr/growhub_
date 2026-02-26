@@ -1,86 +1,137 @@
-# Gateway Setup Guide (Raspberry Pi 4)
+# GrowHub Gateway Setup Guide
 
-This document describes the process of setting up the GrowHub central gateway, including the Dockerized MQTT broker and security configurations.
+This document describes the process of setting up the GrowHub central gateway using a Dockerized stack (MQTT, InfluxDB, PostgreSQL) on a Raspberry Pi 4 or local development machine.
 
 ## 1. Project Structure
-The gateway logic is organized in the `gateway/` directory:
+The gateway logic and data persistence are organized as follows:
 ```text
 GrowHub/
 ├── gateway/
 │   ├── mosquitto/
-│   │   ├── config/      # Configuration files (mosquitto.conf, password_file)
+│   │   ├── config/      # mosquitto.conf
 │   │   ├── data/        # Persistent MQTT data
 │   │   └── log/         # Service logs
+│   ├── telemetry_logger.py  # Bridge MQTT -> InfluxDB
 │   ├── docker-compose.yml
 │   └── .env             # Environment variables (not tracked by git)
 ```
 
 ## 2. Prerequisites
-- Raspberry Pi 4 running Raspberry Pi OS
+- Raspberry Pi 4 or Local Dev Machine (Linux/macOS/Windows)
 - Docker and Docker Compose installed
-- Python 3.11+ with `python-dotenv` and `paho-mqtt` libraries
+- Python 3.11+ with `venv` activated
+- Python libraries: `influxdb-client`, `paho-mqtt`, `python-dotenv`
 
 ## 3. Installation Steps
 
 ### 3.1 Environment Configuration
-Create a `.env` file in the `gateway/` directory based on `.env.example`:
-```bash
-MQTT_BROKER=broker_IP_address_here
-MQTT_USER=pico_client
+Create a `.env` file in the `gateway/` directory. **Critical: Do not use spaces around the `=` sign.**
+
+```ini
+# System Permissions (run 'id' in terminal)
+UID=1000
+GID=1000
+
+# MQTT Broker
+MQTT_USER=your_user_here
 MQTT_PASSWORD=your_secure_password
 MQTT_PORT=1883
+
+# PostgreSQL (Planning & ITK)
+POSTGRES_USER=your_user_here
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=growhub
+
+# InfluxDB (Telemetry)
+INFLUXDB_USER=your_user_here
+INFLUXDB_PASSWORD=your_secure_password
+INFLUXDB_ORG=growhub_org
+INFLUXDB_BUCKET=telemetry
+INFLUXDB_TOKEN=generate_this_after_first_run
 ```
 
-### 3.2 Deployment
-Start the MQTT broker in detached mode:
+### 3.2 Mosquitto Configuration
+Create `mosquitto/config/mosquitto.conf`:
+```ini
+listener 1883 0.0.0.0
+allow_anonymous false
+password_file /mosquitto/config/pwfile
+persistence true
+persistence_location /mosquitto/data/
+log_dest file /mosquitto/log/mosquitto.log
+log_dest stdout
+```
+#### Ensure the configuration file exists
+touch mosquitto/config/password_file
+
+#### Create the MQTT user using credentials from .env
+source .env
+docker exec -it growhub-mqtt mosquitto_passwd -b /mosquitto/config/password_file $MQTT_USER $MQTT_PASSWORD
+
+#### Restart the broker to apply security settings
+docker compose restart
+
+### 3.3 Deployment
+Launch the stack.
+
 ```bash
 cd gateway
 docker compose up -d
 ```
 
-### 3.3 Security Configuration (First run only)
+## 4. Database Access
+
+### 4.1 InfluxDB (Time Series)
+- **URL**: `http://localhost:8086`
+- **Setup**: Log in with credentials from `.env`.
+- **Token**: Go to `Load Data > API Tokens` to generate a token and update your `.env`.
+
+### 4.2 PostgreSQL (Relational) via Adminer
+- **URL**: `http://localhost:8080`
+- **System**: PostgreSQL
+- **Server**: `postgres`
+- **Credentials**: Use `POSTGRES_USER` and `POSTGRES_PASSWORD`.
+
+## 5. Telemetry Logger Setup
+
+The `telemetry_logger.py` acts as a bridge, subscribing to MQTT topics and writing data to InfluxDB.
+
+1. Install dependencies:
+   ```bash
+   pip install influxdb-client paho-mqtt python-dotenv
+   ```
+2. Run the logger:
+   ```bash
+   python3 telemetry_logger.py
+   ```
+
+## 6. Testing & Troubleshooting
+
+### 6.1 Check Container Status
 ```bash
-# Ensure the configuration file exists
-touch mosquitto/config/password_file
-
-# Create the MQTT user using credentials from .env
-source .env
-docker exec -it growhub-mqtt mosquitto_passwd -b /mosquitto/config/password_file $MQTT_USER $MQTT_PASSWORD
-
-# Restart the broker to apply security settings
-docker compose restart
+docker compose ps
 ```
 
-## 4. Testing Connectivity
-
-### 4.1 Local Smoke Test (Internal)
-To verify that the broker is working correctly, open two separate SSH shells on your Raspberry Pi or remote machine.
-
-**Shell 1 (The Subscriber):**
-This shell will wait for messages on the test topic.
+### 6.2 View Logs
 ```bash
-source .env
-docker exec -it growhub-mqtt mosquitto_sub -h localhost -t "growhub/test" -u $MQTT_USER -P $MQTT_PASSWORD
+# General logs
+docker compose logs -f
+
+# Specific service logs
+docker logs growhub-postgres
+docker logs growhub-influx
 ```
 
-**Shell 2 (The Publisher):**
-Send a message from this shell. It should appear instantly in Shell 1.
+### 6.3 MQTT Smoke Test
 ```bash
-source .env
-docker exec -it growhub-mqtt mosquitto_pub -h localhost -t "growhub/test" -m "Hello from RPi Shell" -u $MQTT_USER -P $MQTT_PASSWORD
+# Subscribe to telemetry (from another terminal)
+docker exec -it growhub-mqtt mosquitto_sub -t "+/telemetry" -u $MQTT_USER -P $MQTT_PASSWORD
 ```
 
-### 4.2 Remote Test (External)
-Run the Python test script from your development machine to ensure port 1883 is accessible over the network:
-```bash
-python3 tools/gateway/mqtt.py
-```
-
-## 5. Troubleshooting & Logs
-```bash
-# View real-time logs
-docker logs -f growhub-mqtt
-
-# Check resource usage
-docker stats growhub-mqtt
-```
+## 7. Port Mapping Summary
+| Service | Internal Port | External Port | Description |
+| :--- | :--- | :--- | :--- |
+| Mosquitto | 1883 | 1883 | MQTT Broker |
+| InfluxDB | 8086 | 8086 | Telemetry Database |
+| PostgreSQL | 5432 | 5433 | Relational Database |
+| Adminer | 8080 | 8080 | Database Management UI |
