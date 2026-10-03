@@ -86,12 +86,17 @@ class DeviceRegistry:
         return dev
 
     def apply_telemetry(self, client_id, payload):
-        """Merge a full telemetry payload for one device."""
+        """Store a full telemetry snapshot for one device.
+
+        Sensors and actuators are *replaced* (not merged): the Pico publishes
+        a complete snapshot each cycle, so a sensor/actuator removed from the
+        firmware manifest must disappear from the live view.
+        """
         sensors, actuators = parse_telemetry(payload)
         with self._lock:
             dev = self._device(client_id)
             dev["sensors"] = sensors
-            dev["actuators"].update(actuators)
+            dev["actuators"] = actuators
             dev["last_seen"] = time.time()
             if dev["status"] == "unknown":
                 dev["status"] = "online"

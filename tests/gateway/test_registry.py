@@ -94,6 +94,14 @@ def test_registry_actuator_event_updates_only_target():
     assert dev["actuators"] == {"WaterPump": "ON", "GrowLamp": "OFF"}
 
 
+def test_registry_telemetry_replaces_actuators():
+    reg = DeviceRegistry()
+    reg.apply_telemetry("dev1", {"actuators": {"WaterPump": "ON", "GrowLamp": "OFF"}})
+    # A later snapshot without actuators must clear the previous state.
+    reg.apply_telemetry("dev1", {"ClimateSensor": {"temperature": {"value": 24}}})
+    assert reg.snapshot()[0]["actuators"] == {}
+
+
 def test_registry_status_online_offline_and_garbage():
     reg = DeviceRegistry()
     reg.apply_status("dev1", b"online")
