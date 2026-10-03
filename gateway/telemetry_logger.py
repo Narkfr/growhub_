@@ -30,6 +30,13 @@ def handle_sensors(client_id, payload):
         if sensor_id == "actuators":
             continue
 
+        if not isinstance(metrics, dict):
+            # A sensor can return None when its read fails (e.g. DHT11
+            # timeout); skip it so one failing sensor doesn't drop the
+            # whole telemetry record.
+            print(f"Skipping {sensor_id}: no data")
+            continue
+
         point = Point("environment").tag("device", client_id).tag("sensor", sensor_id)
 
         for metric, data in metrics.items():
