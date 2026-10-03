@@ -86,10 +86,25 @@ class GrowHubController:
         except Exception as e:
             print(f"Callback error: {e}")
 
+    async def _read_sensor(self, sensor, retries=3):
+        """Read a sensor, retrying asynchronously on None (e.g. DHT timeouts)."""
+        for _ in range(retries):
+            try:
+                value = sensor.read()
+            except Exception as e:
+                print(f"Sensor read error: {e}")
+                value = None
+            if value is not None:
+                return value
+            await asyncio.sleep(2)
+        return None
+
     async def _telemetry_task(self):
         while True:
             if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
-                data = {sid: s.read() for sid, s in self.sensors.items()}
+                data = {}
+                for sid, s in self.sensors.items():
+                    data[sid] = await self._read_sensor(s)
                 data["actuators"] = {
                     aid: "ON" if act.is_on() else "OFF"
                     for aid, act in self.actuators.items()
