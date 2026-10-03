@@ -61,7 +61,7 @@ Create `mosquitto/config/mosquitto.conf`:
 ```ini
 listener 1883 0.0.0.0
 allow_anonymous false
-password_file /mosquitto/config/pwfile
+password_file /mosquitto/config/password_file
 persistence true
 persistence_location /mosquitto/data/
 log_dest file /mosquitto/log/mosquitto.log
@@ -290,3 +290,19 @@ docker exec growhub-influx influx query \
 ```
 
 Exposed ports are the same as the native deployment (section 6).
+
+### Docker on Debian — gotchas
+
+- The Compose plugin is **not packaged** by Debian, and `docker.io` ships
+  `buildx` 0.13 while Docker Compose v5 needs buildx ≥ 0.17. Install both
+  from upstream releases: drop the latest `docker-compose` and
+  `docker-buildx` binaries (`aarch64`/`arm64`) into
+  `~/.docker/cli-plugins/` and `chmod +x` them.
+- The frontend proxy target `GROWHUB_API_URL` is baked into the image at
+  build time by `frontend/Dockerfile` (default `http://api:5001`), so the
+  Next.js rewrite always reaches the API container by its Compose service
+  name — no runtime environment variable needed.
+- `mqtt-broker` runs as `user: "${UID}:${GID}"`; make sure
+  `gateway/mosquitto/data/` and `gateway/mosquitto/log/` exist and are owned
+  by that user before the first `docker compose up`, or Mosquitto cannot
+  write its persistence database and log.

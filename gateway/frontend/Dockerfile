@@ -6,6 +6,8 @@ RUN npm ci
 
 FROM node:20-slim AS builder
 WORKDIR /app
+ARG GROWHUB_API_URL=http://api:5001
+ENV GROWHUB_API_URL=${GROWHUB_API_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

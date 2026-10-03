@@ -26,7 +26,6 @@ services:
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
     volumes:
       - influxdb-data:/var/lib/influxdb2
-    user: "${UID}:${GID}"
 
   postgres:
     image: postgres:15
