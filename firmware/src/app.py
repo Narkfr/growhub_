@@ -72,7 +72,7 @@ class GrowHubController:
     def _setup_display(self):
         if "display" not in self.manifest:
             return
-        from display import Display
+        from src.display import Display
 
         self.display = Display(self.manifest["display"])
 
