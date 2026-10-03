@@ -256,3 +256,37 @@ loginctl enable-linger "$USER"   # keep services running after logout
 
 The dashboard is then reachable from the LAN at
 `http://<gateway-ip>:3001/`.
+
+### 9.4 Docker deployment (recommended)
+
+The full stack — Mosquitto, InfluxDB, PostgreSQL, Adminer, the Flask API, the
+MQTT→InfluxDB bridge and the Next.js dashboard — runs in Docker Compose:
+
+```bash
+cd gateway
+cp .env.example .env     # then fill in the secrets
+docker compose up -d --build
+```
+
+The API and telemetry-logger are built from `Dockerfile.gateway`; the
+dashboard from `frontend/Dockerfile`. The DB/broker services use their
+official images. Inside the Docker network, services reach each other by
+name — set in `.env`:
+
+```ini
+MQTT_BROKER=mqtt-broker
+INFLUXDB_URL=http://influxdb:8086
+```
+
+`INFLUXDB_TOKEN` is reused both to initialise InfluxDB
+(`DOCKER_INFLUXDB_INIT_ADMIN_TOKEN`) and to authenticate the telemetry
+logger, so the bridge writes telemetry into the bucket as soon as both
+containers are up. Check it with:
+
+```bash
+docker exec growhub-influx influx query \
+  --org "$INFLUXDB_ORG" --token "$INFLUXDB_TOKEN" \
+  'from(bucket: "'"$INFLUXDB_BUCKET"'") |> range(start: -5m) |> limit(n: 5)'
+```
+
+Exposed ports are the same as the native deployment (section 6).

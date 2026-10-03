@@ -1,0 +1,21 @@
+# Gateway Python image: runs the Flask API (`python -m gateway.api`) or the
+# MQTT -> InfluxDB bridge (`python -m gateway.telemetry_logger`) depending on
+# the compose `command`.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    flask==3.1.0 \
+    paho-mqtt==2.1.0 \
+    python-dotenv==1.2.1 \
+    influxdb-client==1.50.0
+
+COPY gateway/__init__.py gateway/__init__.py
+COPY gateway/api gateway/api
+COPY gateway/telemetry_logger.py gateway/telemetry_logger.py
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 5001
+
+CMD ["python", "-m", "gateway.api"]

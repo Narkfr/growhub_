@@ -9,13 +9,14 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 load_dotenv()
 
 # Configuration InfluxDB
-INFLUX_URL = "http://localhost:8086"
+INFLUX_URL = os.getenv("INFLUXDB_URL", "http://localhost:8086")
 INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN")
 INFLUX_ORG = os.getenv("INFLUXDB_ORG")
 INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET")
 
 # Configuration MQTT
-MQTT_BROKER = "localhost"  # Comme on tourne en local
+MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 
@@ -109,7 +110,7 @@ mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 mqtt_client.on_message = on_message
 
 print(f"Connecting to MQTT broker at {MQTT_BROKER}...")
-mqtt_client.connect(MQTT_BROKER, 1883)
+mqtt_client.connect(MQTT_BROKER, MQTT_PORT)
 mqtt_client.subscribe("+/telemetry")
 mqtt_client.subscribe("+/data/+/state")
 mqtt_client.subscribe("+/status")
