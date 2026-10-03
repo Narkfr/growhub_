@@ -82,10 +82,7 @@ class GrowHubController:
                     # Send feedback
                     self.mqtt.publish(
                         f"{self.client_id}/data/{target_id}/state",
-                        {
-                            "actuator": target_id,
-                            "data": {"state": target.human_state()},
-                        },
+                        {"state": target.human_state()},
                     )
             elif category == "sensors" and action in ALLOWED_SENSOR_ACTIONS:
                 target = self.sensors.get(target_id)
@@ -144,11 +141,8 @@ class GrowHubController:
 
                         # 2. Feedback MQTT immédiat (pour synchroniser le Dashboard)
                         self.mqtt.publish(
-                            f"{self.client_id}/data",
-                            {
-                                "actuator": btn.target_id,
-                                "data": {"state": target.human_state()},
-                            },
+                            f"{self.client_id}/data/{btn.target_id}/state",
+                            {"state": target.human_state()},
                         )
 
                         # Debounce: wait until button is released or small delay
