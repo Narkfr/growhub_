@@ -124,8 +124,8 @@ python3 logic_engine.py
 | PostgreSQL | 5432 | 5432 | Relational Database |
 | Adminer | 8080 | 8080 | SQL Management UI |
 | Flask API | 5001 | 5001 | Real-time REST/SSE API |
-| Next.js dashboard | 3000 | 3000 | Live telemetry dashboard |
-| Grafana *(planned)* | 3001 | 3001 | Visualization Dashboards |
+| Next.js dashboard | 3001 | 3001 | Live telemetry dashboard |
+| Grafana *(planned)* | 3002 | 3002 | Visualization Dashboards |
 
 ## 7. Useful MQTT Commands
 - **Subscribe to Telemetry**: `mosquitto_sub -h localhost -t "+/telemetry" -u $USER -P $PASSWORD`
@@ -201,7 +201,7 @@ python -m gateway.api
 cd gateway/frontend
 npm install
 npm run build     # production build
-npm start         # serve on port 3000
+npm start         # serve on port 3001
 ```
 
 Tests: `npm test` (vitest). The API's Python tests run with the rest of the
@@ -255,4 +255,4 @@ loginctl enable-linger "$USER"   # keep services running after logout
 ```
 
 The dashboard is then reachable from the LAN at
-`http://<gateway-ip>:3000/`.
+`http://<gateway-ip>:3001/`.

@@ -6,6 +6,7 @@ dependencies installed in the active environment).
 
 import os
 import threading
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -14,7 +15,9 @@ from .mqtt_bridge import MqttBridge
 from .registry import DeviceRegistry, EventHub
 from .state import state_payload
 
-load_dotenv()
+# gateway/.env sits next to this package, regardless of the working directory
+# (e.g. when running `python -m gateway.api` from the repo root).
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 HOST = os.getenv("GROWHUB_API_HOST", "0.0.0.0")
 PORT = int(os.getenv("GROWHUB_API_PORT", "5001"))
