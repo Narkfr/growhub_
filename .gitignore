@@ -21,6 +21,7 @@ gateway/mosquitto/config/password_file
 
 # Python build artifacts
 *.egg-info/
+venv/
 
 # MicroPython project markers (local tooling state)
 .micropico

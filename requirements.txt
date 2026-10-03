@@ -1,6 +1,7 @@
 # Gateway runtime
 paho-mqtt==2.1.0
 python-dotenv==1.2.1
+flask==3.1.0
 influxdb-client==1.50.0
 psycopg2-binary==2.9.11
 apscheduler
