@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from datetime import datetime
 
 import paho.mqtt.client as mqtt
@@ -20,8 +21,18 @@ DB_PARAMS = {
 }
 
 
+# Per-thread connection cache: paho callbacks and the APScheduler job run in
+# different threads, so a single shared connection would not be safe.
+_local = threading.local()
+
+
 def get_db_connection():
-    return psycopg2.connect(**DB_PARAMS)
+    """Return a per-thread cached connection, reconnecting if closed."""
+    conn = getattr(_local, "conn", None)
+    if conn is None or conn.closed:
+        conn = psycopg2.connect(**DB_PARAMS)
+        _local.conn = conn
+    return conn
 
 
 def send_command(client_id, actuator, action):
@@ -47,7 +58,7 @@ def get_active_device_config(device_id):
     """
     cur.execute(query, (device_id,))
     row = cur.fetchone()
-    conn.close()
+    cur.close()
     return row  # Returns (settings_dict, mode_string)
 
 
@@ -133,7 +144,7 @@ def run_scheduled_logic():
     cur = conn.cursor()
     cur.execute("SELECT id FROM devices WHERE mode = 'AUTO'")
     devices = cur.fetchall()
-    conn.close()
+    cur.close()
 
     for (device_id,) in devices:
         config = get_active_device_config(device_id)
