@@ -65,11 +65,16 @@ class MqttManager:
         except Exception:
             self.connected = False
 
-    def publish(self, topic, data):
-        """Publish a dictionary as a JSON string."""
+    def publish(self, topic, data, retain=False, qos=0):
+        """Publish a dictionary as a JSON string.
+
+        QoS stays 0: umqtt.simple's QoS 1 publish blocks waiting for PUBACK,
+        which would stall the event loop. Use retain=True for state that must
+        survive on the broker (e.g. actuator state).
+        """
         try:
             msg = ujson.dumps(data)
-            self.client.publish(topic, msg)
+            self.client.publish(topic, msg, retain=retain, qos=qos)
         except Exception as e:
             self.connected = False
             print(f"Failed to publish: {e}")

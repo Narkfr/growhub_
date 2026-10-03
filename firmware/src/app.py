@@ -87,6 +87,7 @@ class GrowHubController:
                     self.mqtt.publish(
                         f"{self.client_id}/data/{target_id}/state",
                         {"state": target.human_state()},
+                        retain=True,
                     )
             elif category == "sensors" and action in ALLOWED_SENSOR_ACTIONS:
                 target = self.sensors.get(target_id)
@@ -147,6 +148,7 @@ class GrowHubController:
                         self.mqtt.publish(
                             f"{self.client_id}/data/{btn.target_id}/state",
                             {"state": target.human_state()},
+                            retain=True,
                         )
 
                         # Debounce: wait until button is released or small delay
