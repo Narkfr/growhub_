@@ -20,6 +20,7 @@ class MqttManager:
             f"{client_id}/actuators/+/action",
             f"{client_id}/sensors/+/action",
         ]
+        self.status_topic = f"{client_id}/status"
 
     def set_callback(self, callback_func):
         self.client.set_callback(callback_func)
@@ -39,10 +40,14 @@ class MqttManager:
         """Connect to the broker and (re)subscribe to the command topics."""
         self.disconnect()
         try:
+            # Last Will: the broker publishes this if we drop unexpectedly.
+            self.client.set_last_will(self.status_topic, b"offline", retain=True)
             self.client.connect()
             for topic in self.subscriptions:
                 self.client.subscribe(topic)
             self.connected = True
+            # Announce presence (retained so the gateway sees current state).
+            self.client.publish(self.status_topic, b"online", retain=True)
             print(
                 f"Connected to MQTT Broker at {self.broker_ip} and "
                 f"subscribed to {self.client.client_id}"

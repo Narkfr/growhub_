@@ -70,11 +70,26 @@ def handle_actuator_event(client_id, target_id, payload):
     write_api.write(bucket=INFLUX_BUCKET, record=point)
 
 
+def handle_device_status(client_id, payload_bytes):
+    """Record device online/offline transitions (from MQTT Last Will)."""
+    status = payload_bytes.decode().strip().lower()
+    online = 1 if status == "online" else 0
+    point = Point("device_status").tag("device", client_id).field("online", online)
+    write_api.write(bucket=INFLUX_BUCKET, record=point)
+    print(f"Device {client_id} is {'online' if online else 'offline'}")
+
+
 def on_message(client, userdata, msg):
     try:
         topic_parts = msg.topic.split("/")
         client_id = topic_parts[0]
-        category = topic_parts[1]  # 'telemetry' ou 'actuators'
+        category = topic_parts[1]  # 'telemetry', 'data' or 'status'
+
+        # Device status is a plain string ("online"/"offline"), not JSON.
+        if category == "status":
+            handle_device_status(client_id, msg.payload)
+            return
+
         payload = json.loads(msg.payload.decode())
 
         if category == "telemetry":
@@ -97,6 +112,7 @@ print(f"Connecting to MQTT broker at {MQTT_BROKER}...")
 mqtt_client.connect(MQTT_BROKER, 1883)
 mqtt_client.subscribe("+/telemetry")
 mqtt_client.subscribe("+/data/+/state")
+mqtt_client.subscribe("+/status")
 
 print("Logger is active. Waiting for data...")
 mqtt_client.loop_forever()
