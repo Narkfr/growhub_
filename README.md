@@ -11,7 +11,7 @@ An automated monitoring and control system for indoor cultivation. This project 
 | **Edge Device** | Raspberry Pi Pico W | Sensor data collection (MicroPython) and actuator control. |
 | **Connectivity** | MQTT over Wi-Fi | Lightweight pub/sub protocol for JSON data transport. |
 | **Gateway Hub** | Raspberry Pi 4 (Docker) | MQTT Broker (Mosquitto), Time-series DB (InfluxDB), and Logic Bridge. |
-| **Interface** | Next.js / Tailwind *(planned)* | Real-time dashboard and historical analytics (not yet implemented). |
+| **Interface** | Next.js / Tailwind + Flask | Real-time dashboard (live telemetry + actuator states) over REST/SSE. |
 
 ---
 
@@ -28,6 +28,8 @@ growhub/
 │   ├── boot.py            # Runs at power-on (currently empty)
 │   └── secrets.example.py # Credentials template (copy to secrets.py)
 ├── gateway/               # Server-side infrastructure (RPi 4)
+│   ├── api/               # Flask real-time API (REST + SSE over MQTT)
+│   ├── frontend/          # Next.js + Tailwind live dashboard
 │   ├── mosquitto/         # MQTT Broker configuration + runtime data
 │   ├── itk/               # Technical itinerary (ITK) JSON definitions
 │   ├── logic_engine.py    # Automation / decision engine
@@ -95,6 +97,9 @@ growhub/
 2. Open the `/firmware` folder in VS Code and initialize the MicroPico project.
 3. Update VS Code settings: `micropico.sync.auto: true`.
 4. Run `docker-compose up -d` on the Raspberry Pi 4 to boot the infrastructure.
+5. Start the live dashboard (API + frontend) — see
+   [Gateway setup guide](docs/gateway_setup.md) for the native systemd
+   deployment used by the PoC.
 
 ---
 
@@ -103,6 +108,8 @@ growhub/
 - **Temperature control**: `temp_min` / `temp_max` are defined in the ITK
   (`gateway/itk/*.json`) but not yet acted upon — there is no ventilation or
   heating actuator wired yet. Temperature is recorded as telemetry only.
-- **Dashboard**: the Next.js web interface is planned but not implemented.
+- **Dashboard**: the live telemetry dashboard (`gateway/api` + `gateway/frontend`)
+  is implemented and shows real-time sensor readings and actuator states.
+  Historical charts over InfluxDB are not wired yet.
 - **TLS**: MQTT runs plaintext on the local network; TLS is deferred (see
   `docs/gateway_setup.md`).

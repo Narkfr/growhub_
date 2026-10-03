@@ -35,9 +35,9 @@ code is edited and run where it deploys.
 
 ### Python 3.11+ (venv)
 The gateway scripts (`logic_engine.py`, `telemetry_logger.py`, `sync_itk.py`,
-`init_db.py`) are plain Python. Dependencies are kept in a virtual
-environment: `influxdb-client`, `paho-mqtt`, `python-dotenv`,
-`psycopg2-binary`, `apscheduler`, `rich`.
+`init_db.py`, and the `gateway/api/` live API) are plain Python. Dependencies
+are kept in a virtual environment: `flask`, `influxdb-client`, `paho-mqtt`,
+`python-dotenv`, `psycopg2-binary`, `apscheduler`, `rich`.
 
 ### git + gh (GitHub CLI)
 Version control and GitHub automation (PRs, issues, reviews). CI runs on
@@ -82,11 +82,22 @@ Visualization dashboards over InfluxDB telemetry. Not yet wired.
 
 ---
 
-## 4. Planned web interface
+## 4. Web interface
 
 ### Next.js + Tailwind
-The real-time dashboard and historical analytics front-end. Planned, not yet
-implemented.
+The real-time dashboard front-end (`gateway/frontend/`). A single page that
+opens a Server-Sent Events stream to the API and renders live sensor readings
+and actuator states, with a polling fallback when the stream drops. Built
+with Next.js 15 (App Router), TypeScript and Tailwind CSS.
+
+### Flask
+The real-time API (`gateway/api/`). An MQTT subscriber (paho-mqtt) that keeps
+the latest state of every device in a thread-safe in-memory registry and
+serves it as JSON (`/api/state`) and Server-Sent Events (`/api/stream`).
+
+### vitest
+The frontend's test runner (pure formatting/label helpers in
+`src/lib/format.test.ts`).
 
 ---
 

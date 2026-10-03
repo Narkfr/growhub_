@@ -123,7 +123,9 @@ python3 logic_engine.py
 | InfluxDB | 8086 | 8086 | Time Series Database |
 | PostgreSQL | 5432 | 5432 | Relational Database |
 | Adminer | 8080 | 8080 | SQL Management UI |
-| Grafana *(planned)* | 3000 | 3000 | Visualization Dashboards |
+| Flask API | 5001 | 5001 | Real-time REST/SSE API |
+| Next.js dashboard | 3000 | 3000 | Live telemetry dashboard |
+| Grafana *(planned)* | 3001 | 3001 | Visualization Dashboards |
 
 ## 7. Useful MQTT Commands
 - **Subscribe to Telemetry**: `mosquitto_sub -h localhost -t "+/telemetry" -u $USER -P $PASSWORD`
@@ -151,3 +153,106 @@ The broker currently runs plain MQTT on port 1883, which is acceptable on a
 trusted local network. If the gateway is ever exposed beyond the LAN, enable
 TLS (port 8883) with per-device certificates. This is intentionally deferred
 for the MVP — see the project roadmap.
+
+## 9. Real-time Dashboard (API + Frontend)
+
+The live dashboard is two pieces, both living under `gateway/`:
+
+- **`gateway/api/`** — a Flask app that subscribes to the broker and keeps the
+  latest state of every device in memory, then serves it over REST and
+  Server-Sent Events (SSE).
+- **`gateway/frontend/`** — a Next.js + Tailwind single-page app that renders
+  the state and updates in real time.
+
+The browser only talks to the Next.js origin; `next.config.mjs` proxies
+`/api/*` to the Flask app (default `http://127.0.0.1:5001`, overridable with
+`GROWHUB_API_URL`).
+
+### 9.1 API
+
+Endpoints:
+
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| GET | `/api/health` | Liveness check + number of known devices. |
+| GET | `/api/state` | Latest state of every device (JSON). |
+| GET | `/api/stream` | SSE stream: full snapshot, then updates on each MQTT message. |
+
+Configuration (from `gateway/.env` or environment):
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `GROWHUB_API_HOST` | `0.0.0.0` | Bind address of the Flask server. |
+| `GROWHUB_API_PORT` | `5001` | HTTP port of the Flask server. |
+| `MQTT_BROKER` | `localhost` | Broker host. |
+| `MQTT_PORT` | `1883` | Broker port. |
+| `MQTT_USER` / `MQTT_PASSWORD` | — | Credentials the API uses to subscribe. |
+
+Run it manually (from the repo root, in a venv with `flask`, `paho-mqtt`,
+`python-dotenv`):
+
+```bash
+python -m gateway.api
+```
+
+### 9.2 Frontend
+
+```bash
+cd gateway/frontend
+npm install
+npm run build     # production build
+npm start         # serve on port 3000
+```
+
+Tests: `npm test` (vitest). The API's Python tests run with the rest of the
+suite (`python -m pytest -q`).
+
+### 9.3 Native systemd deployment (no Docker)
+
+The PoC runs Mosquitto, the API and the dashboard as **systemd user
+services** — no Docker required (the broker binary can even be extracted from
+the distro package without root; see the tooling note). Example units under
+`~/.config/systemd/user/`:
+
+`growhub-api.service`:
+
+```ini
+[Unit]
+Description=GrowHub real-time API
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/growhub_/gateway
+ExecStart=%h/growhub_/venv/bin/python -m gateway.api
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+`growhub-dashboard.service`:
+
+```ini
+[Unit]
+Description=GrowHub dashboard
+After=growhub-api.service
+
+[Service]
+WorkingDirectory=%h/growhub_/gateway/frontend
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now growhub-api growhub-dashboard
+loginctl enable-linger "$USER"   # keep services running after logout
+```
+
+The dashboard is then reachable from the LAN at
+`http://<gateway-ip>:3000/`.
