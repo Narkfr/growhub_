@@ -29,6 +29,7 @@ class GrowHubController:
             broker_ip=secrets.get("MQTT_BROKER"),
             user=secrets.get("MQTT_USER"),
             password=secrets.get("MQTT_PASSWORD"),
+            port=secrets.get("MQTT_PORT", 1883),
         )
 
         # Hardware storage

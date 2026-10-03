@@ -128,3 +128,26 @@ python3 logic_engine.py
 ## 7. Useful MQTT Commands
 - **Subscribe to Telemetry**: `mosquitto_sub -h localhost -t "+/telemetry" -u $USER -P $PASSWORD`
 - **Manual Actuator Command**: `mosquitto_pub -h localhost -t "DeviceID/actuators/ActuatorID/action" -m "ON" -u $USER -P $PASSWORD`
+
+## 8. Security
+
+### Per-device credentials
+Each GrowHub device must authenticate with its OWN MQTT account — never
+share one account across devices, so a compromised device can be revoked
+individually.
+
+```bash
+source .env
+docker exec -it growhub-mqtt mosquitto_passwd -b /mosquitto/config/password_file growhub_device1 <password1>
+docker exec -it growhub-mqtt mosquitto_passwd -b /mosquitto/config/password_file growhub_device2 <password2>
+docker compose restart
+```
+
+Then set `MQTT_USER` / `MQTT_PASSWORD` in each device's `firmware/secrets.py`
+to that device's own credentials.
+
+### TLS (deferred)
+The broker currently runs plain MQTT on port 1883, which is acceptable on a
+trusted local network. If the gateway is ever exposed beyond the LAN, enable
+TLS (port 8883) with per-device certificates. This is intentionally deferred
+for the MVP — see the project roadmap.
