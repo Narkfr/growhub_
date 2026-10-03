@@ -43,6 +43,10 @@ class GrowHubController:
         self._setup_hardware()
         self.mqtt.set_callback(self._on_message)
 
+        # Display (optional, configured in the manifest)
+        self.display = None
+        self._setup_display()
+
     def _setup_hardware(self):
         # Setup Actuators
         for item in self.manifest["actuators"]:
@@ -64,6 +68,13 @@ class GrowHubController:
         for item in self.manifest["buttons"]:
             btn = ManualButton(item["pin"], item["id"], item["target"])
             self.buttons.append(btn)
+
+    def _setup_display(self):
+        if "display" not in self.manifest:
+            return
+        from display import Display
+
+        self.display = Display(self.manifest["display"])
 
     def _on_message(self, topic, msg):
         """Routing logic using getattr for cleaner execution."""
@@ -163,6 +174,34 @@ class GrowHubController:
                 await self.mqtt.connect()
             await asyncio.sleep(10)
 
+    async def _display_task(self):
+        """Render live telemetry on the OLED display (if configured)."""
+        if self.display is None:
+            return
+        while True:
+            try:
+                temp = None
+                hum = None
+                for sensor in self.sensors.values():
+                    data = await self._read_sensor(sensor, retries=1)
+                    if not data:
+                        continue
+                    if "temperature" in data:
+                        temp = data["temperature"]["value"]
+                        hum = data.get("humidity", {}).get("value")
+
+                self.display.clear()
+                self.display.text("GROWHUB", 0, 0)
+                if temp is not None and hum is not None:
+                    self.display.text(f"Temp: {temp} C", 0, 25)
+                    self.display.text(f"Hum: {hum}%", 0, 45)
+                else:
+                    self.display.text("Erreur Capteur", 0, 25)
+                self.display.show()
+            except Exception as e:
+                print(f"Display error: {e}")
+            await asyncio.sleep(2)
+
     async def run(self):
         """Entry point for the async loop."""
         await self.wifi.connect()
@@ -173,6 +212,7 @@ class GrowHubController:
             self._telemetry_task(),
             self._listen_task(),
             self._button_task(),
+            self._display_task(),
             self.wifi.keep_connected(),
             self._mqtt_keepalive(),
         )

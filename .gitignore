@@ -16,6 +16,7 @@ gateway/influxdb/data
 # Secrets
 gateway/.env
 firmware/secrets.py
+firmware/manifest.py
 gateway/mosquitto/config/password_file
 
 # Python build artifacts
