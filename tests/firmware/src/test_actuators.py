@@ -54,6 +54,16 @@ class TestActuator:
         mock_pin.value.return_value = 0
         assert actuator.human_state() == "ON"
 
+    def test_actuator_active_high(self, mock_pin):
+        with patch("firmware.src.actuators.base.Pin", return_value=mock_pin):
+            actuator = BaseActuator(
+                pin_number=5, actuator_id="pump_1", active_low=False
+            )
+        actuator.on()
+        mock_pin.value.assert_called_with(1)
+        actuator.off()
+        mock_pin.value.assert_called_with(0)
+
 
 class TestManualButton:
     @pytest.fixture

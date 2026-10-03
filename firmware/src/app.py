@@ -42,7 +42,9 @@ class GrowHubController:
     def _setup_hardware(self):
         # Setup Actuators
         for item in self.manifest["actuators"]:
-            self.actuators[item["id"]] = BaseActuator(item["pin"], item["id"])
+            self.actuators[item["id"]] = BaseActuator(
+                item["pin"], item["id"], item.get("active_low", True)
+            )
 
         # Setup Sensors
         for item in self.manifest["sensors"]:
