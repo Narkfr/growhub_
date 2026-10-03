@@ -1,4 +1,6 @@
 MANIFEST = {
+    # Used as a prefix: app.py appends a unique suffix from
+    # machine.unique_id() so multiple GrowHubs don't collide on MQTT.
     "client_id": "GrowHubClient",
     "actuators": [{"id": "WaterPump", "pin": 18}, {"id": "GrowLamp", "pin": 19}],
     "buttons": [

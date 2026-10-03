@@ -1,5 +1,8 @@
 import asyncio
 
+import machine
+import ubinascii
+
 from constants import ALLOWED_ACTUATOR_ACTIONS, ALLOWED_SENSOR_ACTIONS
 from src.actuators.base import BaseActuator, ManualButton
 from src.mqtt_manager import MqttManager
@@ -12,12 +15,17 @@ class GrowHubController:
         self.manifest = manifest
         self.secrets = secrets
 
+        # Unique client id per device (prevents MQTT id collisions when
+        # several GrowHubs share a broker).
+        unique = ubinascii.hexlify(machine.unique_id()).decode()
+        self.client_id = f"{manifest['client_id']}-{unique}"
+
         # Managers
         self.wifi = NetworkManager(
             secrets.get("WIFI_SSID"), secrets.get("WIFI_PASSWORD")
         )
         self.mqtt = MqttManager(
-            client_id=manifest["client_id"],
+            client_id=self.client_id,
             broker_ip=secrets.get("MQTT_BROKER"),
             user=secrets.get("MQTT_USER"),
             password=secrets.get("MQTT_PASSWORD"),
@@ -70,7 +78,7 @@ class GrowHubController:
                     getattr(target, action)()
                     # Send feedback
                     self.mqtt.publish(
-                        f"{self.manifest['client_id']}/data/{target_id}/state",
+                        f"{self.client_id}/data/{target_id}/state",
                         {
                             "actuator": target_id,
                             "data": {"state": target.human_state()},
@@ -80,7 +88,7 @@ class GrowHubController:
                 target = self.sensors.get(target_id)
                 if target:
                     self.mqtt.publish(
-                        f"{self.manifest['client_id']}/data",
+                        f"{self.client_id}/data",
                         {"sensor": target_id, "data": target.read()},
                     )
         except Exception as e:
@@ -109,7 +117,7 @@ class GrowHubController:
                     aid: "ON" if act.is_on() else "OFF"
                     for aid, act in self.actuators.items()
                 }
-                self.mqtt.publish(f"{self.manifest['client_id']}/telemetry", data)
+                self.mqtt.publish(f"{self.client_id}/telemetry", data)
             await asyncio.sleep(1)
 
     async def _listen_task(self):
@@ -130,7 +138,7 @@ class GrowHubController:
 
                         # 2. Feedback MQTT immédiat (pour synchroniser le Dashboard)
                         self.mqtt.publish(
-                            f"{self.manifest['client_id']}/data",
+                            f"{self.client_id}/data",
                             {
                                 "actuator": btn.target_id,
                                 "data": {"state": target.human_state()},
