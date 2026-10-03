@@ -108,6 +108,10 @@ _sensor_classes = types.ModuleType("src.sensors.sensor_classes")
 _sensor_classes.SENSOR_CLASSES = {"csmsv2": FakeSensor, "dht11": FakeSensor}
 sys.modules["src.sensors.sensor_classes"] = _sensor_classes
 
+_display = types.ModuleType("src.display")
+_display.Display = MagicMock()
+sys.modules["src.display"] = _display
+
 from src.app import GrowHubController  # noqa: E402
 
 MANIFEST = {
@@ -340,3 +344,53 @@ def test_mqtt_keepalive_reconnects(controller):
         with pytest.raises(_LoopBreak):
             asyncio.run(controller._mqtt_keepalive())
     controller.mqtt.connect.assert_called_once()
+
+
+# --- display integration -----------------------------------------------------
+
+
+def test_setup_display_when_configured():
+    _display.Display.reset_mock()
+    display_cfg = {"type": "ssd1306", "width": 128, "height": 64}
+    c = GrowHubController(dict(MANIFEST, display=display_cfg), SECRETS)
+    assert c.display is _display.Display.return_value
+    _display.Display.assert_called_once_with(display_cfg)
+
+
+def test_setup_display_absent():
+    c = GrowHubController(MANIFEST, SECRETS)
+    assert c.display is None
+
+
+def test_display_task_returns_when_no_display():
+    c = GrowHubController(MANIFEST, SECRETS)
+    asyncio.run(c._display_task())
+
+
+def test_display_task_renders_temperature():
+    c = GrowHubController(MANIFEST, SECRETS)
+    c.display = MagicMock()
+    c.sensors["Climate"].read.return_value = {
+        "temperature": {"value": 21.5},
+        "humidity": {"value": 55},
+    }
+    with patch("asyncio.sleep", _break_sleep):
+        with pytest.raises(_LoopBreak):
+            asyncio.run(c._display_task())
+
+    c.display.clear.assert_called_once()
+    c.display.text.assert_any_call("GROWHUB", 0, 0)
+    c.display.text.assert_any_call("Temp: 21.5 C", 0, 25)
+    c.display.text.assert_any_call("Hum: 55%", 0, 45)
+    c.display.show.assert_called_once()
+
+
+def test_display_task_shows_error_when_no_temperature():
+    c = GrowHubController(MANIFEST, SECRETS)
+    c.display = MagicMock()
+    for sensor in c.sensors.values():
+        sensor.read.return_value = {"moisture": {"value": 40}}
+    with patch("asyncio.sleep", _break_sleep):
+        with pytest.raises(_LoopBreak):
+            asyncio.run(c._display_task())
+    c.display.text.assert_any_call("Erreur Capteur", 0, 25)
