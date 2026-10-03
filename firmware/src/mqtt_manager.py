@@ -5,7 +5,9 @@ from lib.umqtt.simple import MQTTClient
 class MqttManager:
     """Handles MQTT connection and data publishing."""
 
-    def __init__(self, client_id, broker_ip, user, password, port=1883):
+    def __init__(
+        self, client_id, broker_ip, user, password, port=1883, connect_timeout=5
+    ):
         self.client = MQTTClient(
             client_id=client_id,
             server=broker_ip,
@@ -15,6 +17,7 @@ class MqttManager:
             keepalive=60,
         )
         self.broker_ip = broker_ip
+        self.connect_timeout = connect_timeout
         self.connected = False
         self.subscriptions = [
             f"{client_id}/actuators/+/action",
@@ -42,7 +45,7 @@ class MqttManager:
         try:
             # Last Will: the broker publishes this if we drop unexpectedly.
             self.client.set_last_will(self.status_topic, b"offline", retain=True)
-            self.client.connect()
+            self.client.connect(timeout=self.connect_timeout)
             for topic in self.subscriptions:
                 self.client.subscribe(topic)
             self.connected = True

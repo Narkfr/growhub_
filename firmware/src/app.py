@@ -203,11 +203,13 @@ class GrowHubController:
             await asyncio.sleep(2)
 
     async def run(self):
-        """Entry point for the async loop."""
-        await self.wifi.connect()
-        if self.wifi.wlan.isconnected():
-            await self.mqtt.connect()
+        """Entry point for the async loop.
 
+        All background tasks start immediately so the display and buttons
+        keep working even when Wi-Fi or MQTT are unavailable. Connectivity
+        is established by keep_connected() and _mqtt_keepalive() running
+        in the background.
+        """
         await asyncio.gather(
             self._telemetry_task(),
             self._listen_task(),
