@@ -90,10 +90,13 @@ class GrowHubController:
             elif category == "sensors" and action in ALLOWED_SENSOR_ACTIONS:
                 target = self.sensors.get(target_id)
                 if target:
-                    self.mqtt.publish(
-                        f"{self.client_id}/data",
-                        {"sensor": target_id, "data": target.read()},
-                    )
+                    result = target.read()
+                    if result is not None:
+                        # Reuse the telemetry topic/shape so the gateway
+                        # logger picks up this on-demand reading.
+                        self.mqtt.publish(
+                            f"{self.client_id}/telemetry", {target_id: result}
+                        )
         except Exception as e:
             print(f"Callback error: {e}")
 
