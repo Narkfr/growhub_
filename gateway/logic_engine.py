@@ -72,7 +72,7 @@ def handle_lighting(device_id, settings):
     print(f"[{device_id}] Light Check: Start {start_h}h for {duration}h")
 
     if duration == 0:
-        send_command(device_id, "GrowLamp", "off")
+        set_actuator(device_id, "GrowLamp", "off")
         return
 
     now_h = datetime.now().hour
@@ -86,7 +86,7 @@ def handle_lighting(device_id, settings):
         should_be_on = now_h >= start_h or now_h < end_h
 
     action = "on" if should_be_on else "off"
-    send_command(device_id, "GrowLamp", action)
+    set_actuator(device_id, "GrowLamp", action)
 
 
 # Moisture hysteresis band (%): pump turns ON strictly below the target and
