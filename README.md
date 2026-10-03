@@ -88,3 +88,14 @@ growhub/
 2. Open the `/firmware` folder in VS Code and initialize the MicroPico project.
 3. Update VS Code settings: `micropico.sync.auto: true`.
 4. Run `docker-compose up -d` on the Raspberry Pi 4 to boot the infrastructure.
+
+---
+
+## 🗺️ Roadmap / Known limitations
+
+- **Temperature control**: `temp_min` / `temp_max` are defined in the ITK
+  (`gateway/itk/*.json`) but not yet acted upon — there is no ventilation or
+  heating actuator wired yet. Temperature is recorded as telemetry only.
+- **Dashboard**: the Next.js web interface is planned but not implemented.
+- **TLS**: MQTT runs plaintext on the local network; TLS is deferred (see
+  `docs/gateway_setup.md`).

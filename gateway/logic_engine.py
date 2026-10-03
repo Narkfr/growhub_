@@ -63,6 +63,10 @@ def get_active_device_config(device_id):
 
 
 # --- LOGIC COMPONENTS ---
+#
+# NOTE: the ITK also defines temp_min/temp_max, but there is no ventilation
+# or heating actuator wired yet, so temperature is recorded (telemetry) but
+# not acted upon. See the roadmap in README.md.
 
 
 def handle_lighting(device_id, settings):
