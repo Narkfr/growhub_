@@ -196,7 +196,7 @@ mqtt_client.on_message = on_message
 
 # Scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(run_scheduled_logic, "interval", seconds=5)
+scheduler.add_job(run_scheduled_logic, "interval", seconds=60)
 scheduler.start()
 
 print(f"Attempting to connect to {os.getenv('MQTT_BROKER')}...")
