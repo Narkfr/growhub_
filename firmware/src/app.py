@@ -3,7 +3,11 @@ import asyncio
 import machine
 import ubinascii
 
-from constants import ALLOWED_ACTUATOR_ACTIONS, ALLOWED_SENSOR_ACTIONS
+from constants import (
+    ALLOWED_ACTUATOR_ACTIONS,
+    ALLOWED_SENSOR_ACTIONS,
+    TELEMETRY_INTERVAL_SECONDS,
+)
 from src.actuators.base import BaseActuator, ManualButton
 from src.mqtt_manager import MqttManager
 from src.network_manager import NetworkManager
@@ -121,7 +125,7 @@ class GrowHubController:
                     for aid, act in self.actuators.items()
                 }
                 self.mqtt.publish(f"{self.client_id}/telemetry", data)
-            await asyncio.sleep(1)
+            await asyncio.sleep(TELEMETRY_INTERVAL_SECONDS)
 
     async def _listen_task(self):
         while True:
