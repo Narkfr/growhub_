@@ -1,5 +1,6 @@
 import json
 import queue
+import time
 
 from gateway.api.registry import (
     DeviceRegistry,
@@ -163,3 +164,37 @@ def test_iter_events_keepalive_on_timeout():
     gen = iter_events(reg, q, heartbeat_seconds=0)
     next(gen)  # initial snapshot
     assert next(gen) == ": keepalive\n\n"
+
+
+def test_state_payload_drops_stale_devices():
+    now = time.time()
+
+    class FakeRegistry:
+        def snapshot(self):
+            return [
+                {
+                    "id": "fresh",
+                    "status": "online",
+                    "last_seen": now - 10,
+                    "sensors": {},
+                    "actuators": {},
+                },
+                {
+                    "id": "stale",
+                    "status": "online",
+                    "last_seen": now - 600,
+                    "sensors": {},
+                    "actuators": {},
+                },
+                {
+                    "id": "never",
+                    "status": "unknown",
+                    "last_seen": None,
+                    "sensors": {},
+                    "actuators": {},
+                },
+            ]
+
+    payload = state_payload(FakeRegistry(), stale_after=300)
+    assert [d["id"] for d in payload["devices"]] == ["fresh"]
+    assert payload["count"] == 1

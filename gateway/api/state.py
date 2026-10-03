@@ -6,11 +6,25 @@ without mocking Flask or paho-mqtt.
 
 import json
 import queue
+import time
+
+# A device that hasn't sent anything for this long is dropped from the live
+# view — it is no longer actively sending data.
+STALE_AFTER_SECONDS = 300
 
 
-def state_payload(registry):
-    """Build the JSON body for ``GET /api/state`` from a registry."""
-    devices = registry.snapshot()
+def state_payload(registry, stale_after=STALE_AFTER_SECONDS):
+    """Build the JSON body for ``GET /api/state`` from a registry.
+
+    Devices not seen within ``stale_after`` seconds are filtered out so the
+    dashboard only shows what is currently being received.
+    """
+    devices = [
+        device
+        for device in registry.snapshot()
+        if device["last_seen"] is not None
+        and time.time() - device["last_seen"] <= stale_after
+    ]
     return {"devices": devices, "count": len(devices)}
 
 
