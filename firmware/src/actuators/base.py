@@ -30,8 +30,7 @@ class BaseActuator:
     def toggle(self):
         """Invert the current state of the actuator."""
         print(
-            f"Toggling actuator {self.id} (Pin {self.pin}), "
-            f"state: {self.human_state()}"
+            f"Toggling actuator {self.id} (Pin {self.pin}), state: {self.human_state()}"
         )
         self.pin.value(not self.pin.value())
 

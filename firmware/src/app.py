@@ -2,7 +2,6 @@ import asyncio
 
 import machine
 import ubinascii
-
 from constants import (
     ALLOWED_ACTUATOR_ACTIONS,
     ALLOWED_SENSOR_ACTIONS,

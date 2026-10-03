@@ -5,6 +5,7 @@ Run this ON the Pico (MicroPico "Run" command) with the `firmware/` folder
 as the project root so `src.sensors.*` resolves. It reads both sensors a few
 times so you can verify wiring and calibration in one go.
 """
+
 import time
 
 from src.sensors.climate_sensor import ClimateSensor

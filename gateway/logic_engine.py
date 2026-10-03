@@ -99,7 +99,7 @@ MOISTURE_HYSTERESIS = 5
 # Minimum actuator run time (seconds) before it may be switched back off.
 MIN_RUN_SECONDS = 30
 
-_actuator_state = {}      # (device_id, actuator) -> "on" | "off"
+_actuator_state = {}  # (device_id, actuator) -> "on" | "off"
 _actuator_changed_at = {}  # (device_id, actuator) -> datetime
 
 

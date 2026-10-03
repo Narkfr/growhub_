@@ -15,8 +15,10 @@ class SoilSensor(BaseSensor):
             self.adc = ADC(Pin(pin_number))
             self.calibration = calibration
         except (ValueError, OSError) as e:
-            raise ValueError(f"Failed to initialize sensor on \
-                             pin {pin_number}: {e}") from e
+            raise ValueError(
+                f"Failed to initialize sensor on \
+                             pin {pin_number}: {e}"
+            ) from e
 
     def read_raw(self):
         """Returns the raw 16-bit value (0-65535)."""
