@@ -18,4 +18,4 @@ water_value = soil_pin.read_u16()
 print(f"WET Value (Water): {water_value}")
 
 print("\n--- Calibration Complete ---")
-print(f"Update your SoilSensor(26, dry_value={air_value}, wet_value={water_value})")
+print(f'Update manifest.py: "calibration": {{"dry": {air_value}, "wet": {water_value}}}')
