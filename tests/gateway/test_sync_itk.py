@@ -33,10 +33,10 @@ def test_sync_itks_missing_dir_returns_early(tmp_path, monkeypatch):
 def test_sync_itks_upserts_itk_and_phases(tmp_path, monkeypatch):
     itk_dir = tmp_path / "itk"
     itk_dir.mkdir()
-    (itk_dir / "radis.json").write_text(
+    (itk_dir / "example.json").write_text(
         json.dumps(
             {
-                "name": "Radis",
+                "name": "Example",
                 "phases": [
                     {
                         "name": "Germination",
@@ -73,7 +73,7 @@ def test_sync_itks_upserts_itk_and_phases(tmp_path, monkeypatch):
 def test_sync_itks_rolls_back_on_error(tmp_path, monkeypatch):
     itk_dir = tmp_path / "itk"
     itk_dir.mkdir()
-    (itk_dir / "radis.json").write_text(json.dumps({"name": "Radis", "phases": []}))
+    (itk_dir / "example.json").write_text(json.dumps({"name": "Example", "phases": []}))
     monkeypatch.chdir(tmp_path)
 
     conn = MagicMock()

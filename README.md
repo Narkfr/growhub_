@@ -1,6 +1,6 @@
-# 🌿 Smart Greenhouse - Radish MVP
+# 🌿 GrowHub — Smart Greenhouse
 
-An automated monitoring and control system for high-speed radish cultivation (18-day varieties). This project leverages a modern IoT architecture with a distributed Edge-to-Gateway approach, focused on reliability and data persistence.
+An automated monitoring and control system for indoor cultivation. This project leverages a modern IoT architecture with a distributed Edge-to-Gateway approach, focused on reliability and data persistence.
 
 ---
 
@@ -40,6 +40,13 @@ growhub/
 ├── docs/                  # Setup and build documentation
 └── .gitignore             # Local and sensitive file exclusions
 ```
+
+---
+
+## 📚 Documentation
+
+- [Tooling reference](docs/tooling.md) — the full list of tools used in the project and what each one is for.
+- [Gateway setup guide](docs/gateway_setup.md) — how to deploy the Dockerized gateway stack.
 
 ---
 
