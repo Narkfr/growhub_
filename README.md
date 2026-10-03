@@ -97,13 +97,33 @@ growhub/
 2. Open the `/firmware` folder in VS Code and initialize the MicroPico project.
 3. Update VS Code settings: `micropico.sync.auto: true`.
 4. Run `docker-compose up -d` on the Raspberry Pi 4 to boot the infrastructure.
-5. Start the live dashboard (API + frontend) — see
-   [Gateway setup guide](docs/gateway_setup.md) for the native systemd
-   deployment used by the PoC.
+5. Boot the whole stack with `docker compose up -d --build` in `gateway/` — see
+   the [Gateway setup guide](docs/gateway_setup.md).
 
 ---
 
 ## 🗺️ Roadmap / Known limitations
+
+### Next steps (planned)
+
+- **Multi-device support** — let several Picos publish to the same gateway.
+  The API already keys state by MQTT client id, but the dashboard, the
+  logic engine and the docs assume a single device. Give each device its
+  own MQTT account (see `docs/gateway_setup.md` §8), list every device in
+  the frontend, and make `logic_engine.py` per-device.
+- **Actuator control** — drive actuators two ways:
+  1. manually, from the dashboard (ON/OFF commands: frontend → API → MQTT →
+     firmware);
+  2. automatically, from the ITK rules (e.g. water pump from soil moisture,
+     grow lamp from the light schedule) — finish `gateway/logic_engine.py`
+     and wire the actuator command path end-to-end.
+- **ITK management in the frontend** — view and edit the technical itinerary
+  (phases, thresholds, schedules) from the dashboard, backed by PostgreSQL
+  (`init_db.py` / `sync_itk.py`), instead of editing `gateway/itk/*.json`
+  by hand.
+- **Firmware rework** — clean up the Pico firmware (details to be agreed).
+
+### Known limitations
 
 - **Temperature control**: `temp_min` / `temp_max` are defined in the ITK
   (`gateway/itk/*.json`) but not yet acted upon — there is no ventilation or
