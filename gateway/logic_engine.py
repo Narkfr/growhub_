@@ -78,13 +78,50 @@ def handle_lighting(device_id, settings):
     send_command(device_id, "GrowLamp", action)
 
 
+# Moisture hysteresis band (%): pump turns ON strictly below the target and
+# OFF only once moisture rises this far above it, preventing rapid flapping.
+MOISTURE_HYSTERESIS = 5
+# Minimum actuator run time (seconds) before it may be switched back off.
+MIN_RUN_SECONDS = 30
+
+_actuator_state = {}      # (device_id, actuator) -> "on" | "off"
+_actuator_changed_at = {}  # (device_id, actuator) -> datetime
+
+
+def set_actuator(device_id, actuator, desired):
+    """Send a command only when it actually changes the actuator state.
+
+    Avoids re-sending the same command every tick and enforces a minimum
+    runtime before an actuator can be switched back off.
+    """
+    key = (device_id, actuator)
+    current = _actuator_state.get(key, "off")
+    if desired is None or desired == current:
+        return
+
+    now = datetime.now()
+    if current == "on" and desired == "off":
+        started = _actuator_changed_at.get(key, now)
+        if (now - started).total_seconds() < MIN_RUN_SECONDS:
+            return
+
+    send_command(device_id, actuator, desired)
+    _actuator_state[key] = desired
+    _actuator_changed_at[key] = now
+
+
 def handle_moisture(device_id, settings, current_moisture):
     """Triggers watering if moisture drops below the ITK phase target."""
     target = settings.get("moisture_target", 50)
+
     if current_moisture < target:
-        send_command(device_id, "WaterPump", "on")
+        desired = "on"
+    elif current_moisture > target + MOISTURE_HYSTERESIS:
+        desired = "off"
     else:
-        send_command(device_id, "WaterPump", "off")
+        desired = None  # inside the hysteresis band: keep current state
+
+    set_actuator(device_id, "WaterPump", desired)
 
 
 # --- PERIODIC TASKS ---
