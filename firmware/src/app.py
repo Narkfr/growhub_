@@ -88,7 +88,7 @@ class GrowHubController:
 
     async def _telemetry_task(self):
         while True:
-            if self.wifi.wlan.isconnected():
+            if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
                 data = {sid: s.read() for sid, s in self.sensors.items()}
                 data["actuators"] = {
                     aid: "ON" if act.is_on() else "OFF"
@@ -99,7 +99,7 @@ class GrowHubController:
 
     async def _listen_task(self):
         while True:
-            if self.wifi.wlan.isconnected():
+            if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
                 self.mqtt.check_msg()
             await asyncio.sleep(0.1)
 
@@ -128,9 +128,17 @@ class GrowHubController:
             # Very short sleep to let other tasks run
             await asyncio.sleep(0.05)
 
+    async def _mqtt_keepalive(self):
+        """Reconnect MQTT whenever the link drops (once Wi-Fi is back)."""
+        while True:
+            if self.wifi.wlan.isconnected() and not self.mqtt.is_connected():
+                await self.mqtt.connect()
+            await asyncio.sleep(10)
+
     async def run(self):
         """Entry point for the async loop."""
-        if await self.wifi.connect():
+        await self.wifi.connect()
+        if self.wifi.wlan.isconnected():
             await self.mqtt.connect()
 
         await asyncio.gather(
@@ -138,4 +146,5 @@ class GrowHubController:
             self._listen_task(),
             self._button_task(),
             self.wifi.keep_connected(),
+            self._mqtt_keepalive(),
         )

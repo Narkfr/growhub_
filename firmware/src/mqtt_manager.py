@@ -15,29 +15,50 @@ class MqttManager:
             keepalive=60,
         )
         self.broker_ip = broker_ip
+        self.connected = False
+        self.subscriptions = [
+            f"{client_id}/actuators/+/action",
+            f"{client_id}/sensors/+/action",
+        ]
 
     def set_callback(self, callback_func):
         self.client.set_callback(callback_func)
 
+    def is_connected(self):
+        return self.connected
+
+    def disconnect(self):
+        """Close the current socket (if any) and mark disconnected."""
+        try:
+            self.client.disconnect()
+        except Exception:
+            pass
+        self.connected = False
+
     async def connect(self):
-        """Connect to the MQTT broker."""
+        """Connect to the broker and (re)subscribe to the command topics."""
+        self.disconnect()
         try:
             self.client.connect()
-            # TODO: Consider subscribing to something related to manifest.py
-            # in the future for dynamic updates
-            self.client.subscribe(f"{self.client.client_id}/actuators/+/action")
-            self.client.subscribe(f"{self.client.client_id}/sensors/+/action")
+            for topic in self.subscriptions:
+                self.client.subscribe(topic)
+            self.connected = True
             print(
-                f"Connected to MQTT Broker at {self.broker_ip} and subscribed \
-                to {self.client.client_id}"
+                f"Connected to MQTT Broker at {self.broker_ip} and "
+                f"subscribed to {self.client.client_id}"
             )
             return True
         except Exception as e:
+            self.connected = False
             print(f"Failed to connect to MQTT: {e}")
             return False
 
     def check_msg(self):
-        self.client.check_msg()
+        """Pump incoming MQTT messages; mark disconnected on socket errors."""
+        try:
+            self.client.check_msg()
+        except Exception:
+            self.connected = False
 
     def publish(self, topic, data):
         """Publish a dictionary as a JSON string."""
@@ -45,4 +66,5 @@ class MqttManager:
             msg = ujson.dumps(data)
             self.client.publish(topic, msg)
         except Exception as e:
+            self.connected = False
             print(f"Failed to publish: {e}")
