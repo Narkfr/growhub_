@@ -44,7 +44,7 @@ MQTT_PORT=1883
 
 # PostgreSQL (Planning & ITK)
 POSTGRES_HOST=localhost
-POSTGRES_PORT=5433
+POSTGRES_PORT=5432
 POSTGRES_USER=your_user
 POSTGRES_PASSWORD=your_password
 POSTGRES_DB=growhub
@@ -121,9 +121,9 @@ python3 logic_engine.py
 | :--- | :--- | :--- | :--- |
 | Mosquitto | 1883 | 1883 | MQTT Broker |
 | InfluxDB | 8086 | 8086 | Time Series Database |
-| PostgreSQL | 5432 | 5433 | Relational Database |
+| PostgreSQL | 5432 | 5432 | Relational Database |
 | Adminer | 8080 | 8080 | SQL Management UI |
-| Grafana | 3000 | 3000 | Visualization Dashboards |
+| Grafana *(planned)* | 3000 | 3000 | Visualization Dashboards |
 
 ## 7. Useful MQTT Commands
 - **Subscribe to Telemetry**: `mosquitto_sub -h localhost -t "+/telemetry" -u $USER -P $PASSWORD`

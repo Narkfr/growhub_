@@ -11,29 +11,34 @@ An automated monitoring and control system for high-speed radish cultivation (18
 | **Edge Device** | Raspberry Pi Pico W | Sensor data collection (MicroPython) and actuator control. |
 | **Connectivity** | MQTT over Wi-Fi | Lightweight pub/sub protocol for JSON data transport. |
 | **Gateway Hub** | Raspberry Pi 4 (Docker) | MQTT Broker (Mosquitto), Time-series DB (InfluxDB), and Logic Bridge. |
-| **Interface** | Next.js / Tailwind | Real-time dashboard and historical growth analytics. |
+| **Interface** | Next.js / Tailwind *(planned)* | Real-time dashboard and historical analytics (not yet implemented). |
 
 ---
 
 ## 📂 Project Structure (Clean Monorepo)
 
 ```text
-smart-serre-radis/
-├── firmware/         # Embedded MicroPython source code
-│   ├── src/          # Core logic and drivers (sensors.py, etc.)
-│   ├── lib/          # External MicroPython libraries
-│   ├── boot.py       # Network initialization at startup
-│   ├── main.py       # Main orchestrator (infinite loop)
-│   └── config_culture.py # Agronomic parameters
-├── gateway/          # Server-side infrastructure (RPi 4)
-│   ├── mosquitto/    # MQTT Broker configuration
+growhub/
+├── firmware/              # Embedded MicroPython source
+│   ├── src/               # Core logic: sensors/, actuators/, managers
+│   ├── lib/               # Bundled MicroPython libraries (umqtt)
+│   ├── main.py            # Entry point (asyncio loop)
+│   ├── manifest.py        # Hardware + calibration configuration
+│   ├── constants.py       # Allowed actions / shared constants
+│   ├── boot.py            # Runs at power-on (currently empty)
+│   └── secrets.example.py # Credentials template (copy to secrets.py)
+├── gateway/               # Server-side infrastructure (RPi 4)
+│   ├── mosquitto/         # MQTT Broker configuration + runtime data
+│   ├── itk/               # Technical itinerary (ITK) JSON definitions
+│   ├── logic_engine.py    # Automation / decision engine
+│   ├── telemetry_logger.py# MQTT -> InfluxDB bridge
+│   ├── sync_itk.py        # ITK JSON -> PostgreSQL sync
+│   ├── init_db.py         # PostgreSQL schema initialization
 │   └── docker-compose.yml # Docker service orchestration
-├── dashboard/        # Web Application (Next.js)
-├── tests/            # Centralized Quality Control
-│   ├── firmware/     # Unit tests and mocks for Pico W logic
-│   └── gateway/      # Integration tests (MQTT, Database)
-├── docs/             # Wiring diagrams and build documentation
-└── .gitignore        # Local and sensitive file exclusions
+├── tools/                 # Dev + hardware helpers
+├── tests/                 # Unit tests (sensors + actuators, mocked HW)
+├── docs/                  # Setup and build documentation
+└── .gitignore             # Local and sensitive file exclusions
 ```
 
 ---
