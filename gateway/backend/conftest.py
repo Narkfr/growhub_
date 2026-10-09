@@ -93,6 +93,12 @@ def publisher():
     return FakePublisher()
 
 
+@pytest.fixture
+def failing_publisher():
+    """Exploitable par les tests qui vérifient l'audit d'un broker injoignable."""
+    return FakePublisher(fail_with=OSError("broker injoignable"))
+
+
 @pytest.fixture(autouse=True)
 def no_real_mqtt(monkeypatch, publisher):
     """No test ever opens a socket to a broker: every publisher is the fake one."""
