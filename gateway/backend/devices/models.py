@@ -82,6 +82,11 @@ class Device(models.Model):
         Site, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices"
     )
     last_seen = models.DateTimeField(null=True, blank=True)
+    last_state = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Dernier état connu : capteurs, actionneurs, statut et horodatage.",
+    )
     provisioned_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

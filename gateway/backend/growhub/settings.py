@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "accounts",
     "devices",
+    "telemetry",
 ]
 
 MIDDLEWARE = [
@@ -143,6 +144,8 @@ GROWHUB = {
     "PAIRING_MAX_ATTEMPTS": int(os.environ.get("GROWHUB_PAIRING_MAX_ATTEMPTS", "5")),
     # Hardware device id prefix, e.g. ghb-3f2a91.
     "DEVICE_ID_PREFIX": os.environ.get("GROWHUB_DEVICE_ID_PREFIX", "ghb-"),
+    # How often the SSE stream re-reads the database (seconds).
+    "LIVE_POLL_SECONDS": float(os.environ.get("GROWHUB_LIVE_POLL_SECONDS", "2")),
     # A device with no message for this long is shown as offline.
     "DEVICE_STALE_AFTER_SECONDS": int(
         os.environ.get("GROWHUB_DEVICE_STALE_AFTER", "300")

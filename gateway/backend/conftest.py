@@ -2,6 +2,7 @@ import pytest
 from devices.models import Device, Membership
 from devices.services import create_pairing_claim, redeem_pairing_code
 from django.contrib.auth import get_user_model
+from telemetry.services import CommandDispatcher
 
 User = get_user_model()
 
@@ -47,10 +48,37 @@ def device(make_device, user):
 def pending_device(make_device):
     """A flashed device with an open claim code ``ABC234``."""
     device = make_device(device_id="ghb-7c1d02", status=Device.Status.PENDING)
-    claim, code = create_pairing_claim(device, code="ABC234")
+    create_pairing_claim(device, code="ABC234")
     return device
 
 
 @pytest.fixture
 def claimed_device(pending_device, user):
     return redeem_pairing_code(user, "ABC234")
+
+
+class FakePublisher:
+    """Records published messages instead of talking to a broker."""
+
+    def __init__(self, fail_with=None):
+        self.messages = []
+        self.fail_with = fail_with
+
+    def publish(self, topic, payload, retain=False, qos=0):
+        if self.fail_with is not None:
+            raise self.fail_with
+        self.messages.append({"topic": topic, "payload": payload, "retain": retain})
+        return len(self.messages)
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def publisher():
+    return FakePublisher()
+
+
+@pytest.fixture
+def dispatcher(publisher):
+    return CommandDispatcher(publisher=publisher)
