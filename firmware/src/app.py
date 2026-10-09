@@ -18,9 +18,17 @@ from constants import (
     ALLOWED_ACTUATOR_ACTIONS,
     ALLOWED_CONFIG_ACTIONS,
     ALLOWED_SENSOR_ACTIONS,
+    BUTTON_DEBOUNCE_SECONDS,
+    BUTTON_POLL_SECONDS,
+    DISPLAY_REFRESH_SECONDS,
+    DISPLAY_SENSOR_READ_RETRIES,
     FW_VERSION,
+    LISTEN_POLL_SECONDS,
     MIN_TELEMETRY_INTERVAL_SECONDS,
     MODEL,
+    MQTT_RETRY_SECONDS,
+    SENSOR_READ_RETRIES,
+    SENSOR_RETRY_DELAY_SECONDS,
     TELEMETRY_INTERVAL_SECONDS,
 )
 from src import identity, topics
@@ -278,7 +286,7 @@ class GrowHubController:
 
     # -- boucles -------------------------------------------------------------
 
-    async def _read_sensor(self, sensor, retries=3):
+    async def _read_sensor(self, sensor, retries=SENSOR_READ_RETRIES):
         """Lit un capteur, en réessayant de façon asynchrone sur ``None``."""
         for _ in range(retries):
             try:
@@ -288,7 +296,7 @@ class GrowHubController:
                 value = None
             if value is not None:
                 return value
-            await asyncio.sleep(2)
+            await asyncio.sleep(SENSOR_RETRY_DELAY_SECONDS)
         return None
 
     def _announce(self):
@@ -327,7 +335,7 @@ class GrowHubController:
         while True:
             if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
                 self.mqtt.check_msg()
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(LISTEN_POLL_SECONDS)
 
     async def _button_task(self):
         """Lecture fréquente et non bloquante des boutons poussoirs."""
@@ -342,8 +350,8 @@ class GrowHubController:
                             {"actuators": self._actuator_states()},
                             retain=True,
                         )
-                        await asyncio.sleep(0.3)
-            await asyncio.sleep(0.05)
+                        await asyncio.sleep(BUTTON_DEBOUNCE_SECONDS)
+            await asyncio.sleep(BUTTON_POLL_SECONDS)
 
     async def _mqtt_keepalive(self):
         """Reconnecte le broker dès que le Wi-Fi revient."""
@@ -351,9 +359,9 @@ class GrowHubController:
             if self.wifi.wlan.isconnected() and not self.mqtt.is_connected():
                 if await self.mqtt.connect(self._subscriptions()):
                     self._announce()
-            await asyncio.sleep(10)
+            await asyncio.sleep(MQTT_RETRY_SECONDS)
 
-    async def _snapshot(self, retries=3):
+    async def _snapshot(self, retries=SENSOR_READ_RETRIES):
         """Dernière mesure de chaque capteur, dans la forme publiée sur MQTT.
 
         Une seule lecture sert l'écran et la télémétrie : partager cette photo
@@ -377,10 +385,13 @@ class GrowHubController:
                         self.display, self.device_id, self.pairing_code
                     )
                 else:
-                    self.screen.draw(self.display, await self._snapshot(retries=1))
+                    self.screen.draw(
+                        self.display,
+                        await self._snapshot(retries=DISPLAY_SENSOR_READ_RETRIES),
+                    )
             except Exception as e:
                 print(f"Erreur d'affichage : {e}")
-            await asyncio.sleep(2)
+            await asyncio.sleep(DISPLAY_REFRESH_SECONDS)
 
     async def run(self):
         """Point d'entrée de la boucle asyncio.

@@ -1,3 +1,4 @@
+from constants import ACTUATOR_STATE_OFF, ACTUATOR_STATE_ON
 from machine import Pin
 
 
@@ -41,7 +42,7 @@ class BaseActuator:
 
     def human_state(self):
         """Return a human-readable state."""
-        return "ON" if self.is_on() else "OFF"
+        return ACTUATOR_STATE_ON if self.is_on() else ACTUATOR_STATE_OFF
 
 
 class ManualButton:

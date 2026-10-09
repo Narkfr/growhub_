@@ -5,12 +5,11 @@ le seul endroit où le contrat est écrit, côté boîtier comme côté serveur
 (``gateway/backend/growhub/topics.py``).
 """
 
-PREFIX = "growhub"
-VERSION = "v1"
+from constants import MQTT_TOPIC_PREFIX, MQTT_TOPIC_VERSION
 
 
 def _device_topic(device_id, *parts):
-    return "/".join((PREFIX, VERSION, device_id) + parts)
+    return "/".join((MQTT_TOPIC_PREFIX, MQTT_TOPIC_VERSION, device_id) + parts)
 
 
 def telemetry(device_id):
@@ -56,12 +55,12 @@ def command_topics(device_id):
 
 def provision(device_id):
     """Le boîtier s'y annonce (retained) pour réclamer son appairage."""
-    return f"{PREFIX}/{VERSION}/provision/{device_id}"
+    return f"{MQTT_TOPIC_PREFIX}/{MQTT_TOPIC_VERSION}/provision/{device_id}"
 
 
 def provision_credentials(device_id):
     """Le serveur y dépose les identifiants définitifs (retained)."""
-    return f"{PREFIX}/{VERSION}/provision/{device_id}/creds"
+    return f"{MQTT_TOPIC_PREFIX}/{MQTT_TOPIC_VERSION}/provision/{device_id}/creds"
 
 
 def is_provision_credentials(device_id, topic):

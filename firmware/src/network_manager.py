@@ -1,5 +1,10 @@
 import network
 import uasyncio as asyncio
+from constants import (
+    WIFI_CONNECT_ATTEMPT_SECONDS,
+    WIFI_CONNECT_ATTEMPTS,
+    WIFI_RETRY_SECONDS,
+)
 
 
 class NetworkManager:
@@ -17,11 +22,10 @@ class NetworkManager:
             print(f"Connecting to {self.ssid}...")
             self.wlan.connect(self.ssid, self.password)
 
-            # Timeout of 10 seconds
-            for _ in range(10):
+            for _ in range(WIFI_CONNECT_ATTEMPTS):
                 if self.wlan.isconnected():
                     break
-                await asyncio.sleep(1)
+                await asyncio.sleep(WIFI_CONNECT_ATTEMPT_SECONDS)
 
         if self.wlan.isconnected():
             print(f"Wi-Fi Connected: {self.wlan.ifconfig()[0]}")
@@ -34,4 +38,4 @@ class NetworkManager:
             if not self.wlan.isconnected():
                 print("Wi-Fi lost, reconnecting...")
                 await self.connect()
-            await asyncio.sleep(30)
+            await asyncio.sleep(WIFI_RETRY_SECONDS)

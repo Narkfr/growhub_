@@ -10,25 +10,19 @@ mesure, un autre ordre, un libellé différent) ne touche donc que le manifeste.
 """
 
 # Le boîtier n'a pas de `dataclasses` : classes simples, comme le reste du
-# firmware.
-UNIT_LABELS = {
-    "celsius": "°C",
-    "percent": "%",
-    "lux": "lux",
-}
-
-# Un champ actionneur publie "ON"/"OFF" : on l'écrit en clair.
-ACTUATOR_LABELS = {"ON": "Allumé", "OFF": "Éteint"}
-
-# Quand le manifeste ne déclare pas de champs : le comportement historique
-# (température et humidité du premier capteur qui les publie). C'est une donnée
-# de configuration, pas une règle dispersée dans le contrôleur.
-DEFAULT_FIELDS = (
-    {"source": "auto", "metric": "temperature", "label": "Temp", "decimals": 1},
-    {"source": "auto", "metric": "humidity", "label": "Hum", "decimals": 0},
+# firmware. Tout ce qui est montré ou mesuré vient de `constants.py`.
+from constants import (
+    ACTUATOR_STATE_LABELS,
+    DISPLAY_DEFAULT_HEIGHT,
+    PAIRING_CODE_PLACEHOLDER,
+    SCREEN_DECIMALS_DEFAULT,
+    SCREEN_FIELDS_DEFAULT,
+    SCREEN_FIRST_LINE_Y,
+    SCREEN_LINE_HEIGHT,
+    SCREEN_PAGE_INDICATOR_X,
+    SCREEN_TITLE,
+    UNIT_LABELS,
 )
-
-DEFAULT_TITLE = "BOURGEON"
 
 
 def _format_number(value, decimals):
@@ -45,8 +39,6 @@ def _format_number(value, decimals):
 class ScreenField:
     """Une ligne : une mesure nommée, et comment l'écrire."""
 
-    DEFAULT_DECIMALS = 1
-
     def __init__(
         self, source, metric=None, label=None, unit=None, decimals=None, kind="sensor"
     ):
@@ -54,7 +46,7 @@ class ScreenField:
         self.metric = metric
         self.label = label or metric or source
         self.unit = unit
-        self.decimals = self.DEFAULT_DECIMALS if decimals is None else int(decimals)
+        self.decimals = SCREEN_DECIMALS_DEFAULT if decimals is None else int(decimals)
         self.kind = kind
 
     @classmethod
@@ -107,7 +99,7 @@ class ScreenField:
         if value is None:
             return f"{self.label}: --"
         if isinstance(value, str):
-            return f"{self.label}: {ACTUATOR_LABELS.get(value, value)}"
+            return f"{self.label}: {ACTUATOR_STATE_LABELS.get(value, value)}"
         unit = self.unit or UNIT_LABELS.get(unit, unit) or ""
         number = _format_number(value, self.decimals)
         return f"{self.label}: {number} {unit}".rstrip()
@@ -116,7 +108,14 @@ class ScreenField:
 class ScreenLayout:
     """Ce que l'écran montre : un titre, des champs, paginés si nécessaire."""
 
-    def __init__(self, title, fields, height=64, line_height=20, first_line_y=20):
+    def __init__(
+        self,
+        title,
+        fields,
+        height=DISPLAY_DEFAULT_HEIGHT,
+        line_height=SCREEN_LINE_HEIGHT,
+        first_line_y=SCREEN_FIRST_LINE_Y,
+    ):
         self.title = title
         self.fields = fields
         self.line_height = line_height
@@ -128,16 +127,16 @@ class ScreenLayout:
     @classmethod
     def from_manifest(cls, config):
         fields = []
-        for spec in config.get("fields", DEFAULT_FIELDS):
+        for spec in config.get("fields", SCREEN_FIELDS_DEFAULT):
             try:
                 fields.append(ScreenField.from_dict(spec))
             except ValueError as error:
                 # Un champ mal écrit ne doit pas priver de tout l'écran.
                 print(f"Champ d'écran ignoré : {error}")
         return cls(
-            title=config.get("title", DEFAULT_TITLE),
+            title=config.get("title", SCREEN_TITLE),
             fields=fields,
-            height=config.get("height", 64),
+            height=config.get("height", DISPLAY_DEFAULT_HEIGHT),
         )
 
     def page_count(self):
@@ -162,7 +161,9 @@ class ScreenLayout:
             display.text(text, 0, y)
             y += self.line_height
         if self.page_count() > 1:
-            display.text(f"{self._page + 1}/{self.page_count()}", 100, 0)
+            display.text(
+                f"{self._page + 1}/{self.page_count()}", SCREEN_PAGE_INDICATOR_X, 0
+            )
         display.show()
         self.advance()
 
@@ -170,6 +171,6 @@ class ScreenLayout:
         """Écran d'appairage : le code à saisir dans l'application."""
         display.clear()
         display.text(self.title, 0, 0)
-        display.text(f"Code : {code or '----'}", 0, 20)
+        display.text(f"Code : {code or PAIRING_CODE_PLACEHOLDER}", 0, 20)
         display.text(device_id, 0, 40)
         display.show()

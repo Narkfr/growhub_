@@ -8,6 +8,7 @@ instead of silently breaking a device in a greenhouse.
 """
 
 import importlib.util
+import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +23,11 @@ OTHER = "ghb-001122"
 
 @pytest.fixture(scope="module")
 def firmware():
+    # `firmware/src/topics.py` lit ses constantes dans `firmware/constants.py` :
+    # le dossier firmware doit être importable, comme pour ses propres tests.
+    firmware_root = str(FIRMWARE_TOPICS.parents[1])
+    if firmware_root not in sys.path:
+        sys.path.insert(0, firmware_root)
     spec = importlib.util.spec_from_file_location("firmware_topics", FIRMWARE_TOPICS)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
