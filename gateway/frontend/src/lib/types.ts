@@ -1,17 +1,17 @@
-export interface Metric {
-  value: number;
-  unit: string | null;
-}
-
-export interface Device {
-  id: string;
-  status: 'online' | 'offline' | 'unknown';
-  last_seen: number | null;
-  sensors: Record<string, Record<string, Metric>>;
-  actuators: Record<string, 'ON' | 'OFF'>;
-}
-
-export interface StatePayload {
-  devices: Device[];
-  count: number;
-}
+/**
+ * Les types vivent dans le paquet partagé `@growhub/client` : le tableau de bord
+ * et l'application mobile décrivent ainsi la même API, une seule fois.
+ */
+export type {
+  CommandAudit,
+  CommandKind,
+  Device,
+  DeviceStatus,
+  LiveDevice,
+  LiveSnapshot,
+  Membership,
+  Metric,
+  Role,
+  TelemetryPoint,
+  User,
+} from '@growhub/client';

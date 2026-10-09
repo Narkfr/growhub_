@@ -26,10 +26,12 @@ le travail se fait dans une branche par jalon, `hermes` reste la branche d'inté
 - [x] **M3** — télémétrie PostgreSQL + flux live (SSE) + pont MQTT (worker)
 - [x] **M4** — appairage Bourgeon : `/claim`, ACL, provisioning des creds
 - [x] **M5** — firmware v2 : `device_id` = `machine.unique_id()`, topic `info`, topic de config, code d'appairage à l'écran
-- [ ] **M6** — front Next : login, liste des Bourgeons, partage, dashboard live
+- [x] **M6** — front Next : login, liste des Bourgeons, partage, dashboard live
 - [ ] **M7** — infra : retrait de Flask / InfluxDB / Adminer, compose et unités systemd revus, sauvegardes
 - [ ] **M8** — CI/CD : runner self-hosted, jobs build + deploy, runbook et rollback
 - [ ] **M9** — documentation finale, CHANGELOG, dépendances à jour
+
+Paquet partagé `@growhub/client` : types et client API réutilisables par l’application mobile (React Native) — voir `docs/front.md`.
 
 Tags prévus : `v0.2` après M4 (back + appairage), `v0.3` après M6, `v1.0` après M8 (fin de migration).
 `v0.2` est posé sur `main` après M4 ; M5 (firmware) ne change rien à ce que le serveur expose,
@@ -47,6 +49,12 @@ il n'ajoute donc pas de tag.
 
 - **2026-10-09 — M0** : `hermes` (36 commits) mergée dans `main` en `--no-ff` (`fdee1c6`), tag annoté `v0.1` poussé. CI relancée sur `main`.
 - **2026-10-09 — M1** : conception écrite (architecture, contrat MQTT, flux d'appairage, 5 ADR).
+- **2026-10-09 — M6** : paquet partagé `@growhub/client` (types alignés sur les sérialiseurs DRF,
+  client sans dépendance : `fetch` injecté, jeton CSRF lu dans le cookie, flux SSE avec repli en
+  sondage — donc utilisable tel quel par React Native) ; tableau de bord Next complet (connexion,
+  liste, appairage par code, détail avec mesures/actionneurs/configuration/historique/partage) ;
+  `/auth/me` pose désormais le cookie CSRF, sans quoi la SPA ne pouvait pas poster ; job CI dédié
+  au paquet partagé.
 - **2026-10-09 — M5** : firmware sur le contrat v1 — identifiant `ghb-xxxxxx` dérivé des
   6 derniers hexadécimaux du matériel (les octets de tête sont communs aux Pico W de la série),
   topics centralisés dans `src/topics.py`, mode appairage (annonce retained, attente des

@@ -1,0 +1,23 @@
+{
+  "name": "@growhub/client",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Client API GrowHub : types et appels partagés entre le tableau de bord et l'application mobile.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
