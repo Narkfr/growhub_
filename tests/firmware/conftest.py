@@ -7,6 +7,7 @@ de tests sans rapport).
 """
 
 import binascii
+import importlib.util
 import json as _json
 import sys
 import types
@@ -115,6 +116,18 @@ _sensor_classes = types.ModuleType("src.sensors.sensor_classes")
 _sensor_classes.SENSOR_CLASSES = {"csmsv2": FakeSensor, "dht11": FakeSensor}
 sys.modules["src.sensors.sensor_classes"] = _sensor_classes
 
+# Le vrai ScreenLayout est utilisé (c'est de la logique pure) : seule la dalle
+# physique est remplacée. Il est chargé par chemin pour ne pas importer le paquet
+# `src.display`, qui tirerait `lib.ssd1306` et `machine`.
+_SCREEN_PATH = _FIRMWARE / "src" / "display" / "screen.py"
+_screen_spec = importlib.util.spec_from_file_location("growhub_screen", _SCREEN_PATH)
+_screen_module = importlib.util.module_from_spec(_screen_spec)
+_screen_spec.loader.exec_module(_screen_module)
+
 _display = types.ModuleType("src.display")
-_display.Display = MagicMock
+# Une instance (et non la classe MagicMock) : les tests l'utilisent comme
+# fabrique, ce qui permet Display.reset_mock() et Display.return_value.
+_display.Display = MagicMock()
+_display.ScreenField = _screen_module.ScreenField
+_display.ScreenLayout = _screen_module.ScreenLayout
 sys.modules["src.display"] = _display

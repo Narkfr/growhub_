@@ -76,6 +76,7 @@ class GrowHubController:
 
         # Écran (optionnel, déclaré dans le manifeste)
         self.display = None
+        self.screen = None
         self._setup_display()
 
     # -- mise en place --------------------------------------------------------
@@ -100,9 +101,11 @@ class GrowHubController:
     def _setup_display(self):
         if "display" not in self.manifest:
             return
-        from src.display import Display
+        from src.display import Display, ScreenLayout
 
         self.display = Display(self.manifest["display"])
+        # Ce qui s'affiche est décrit par le manifeste, pas ici.
+        self.screen = ScreenLayout.from_manifest(self.manifest["display"])
 
     # -- payloiades ----------------------------------------------------------
 
@@ -313,18 +316,11 @@ class GrowHubController:
         while True:
             if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
                 self._sequence += 1
-                data = {
-                    "seq": self._sequence,
-                    "sensors": {},
-                    "actuators": self._actuator_states(),
-                }
-                for sensor_id, sensor in self.sensors.items():
-                    reading = await self._read_sensor(sensor)
-                    if reading is not None:
-                        data["sensors"][sensor_id] = reading
+                snapshot = await self._snapshot()
+                snapshot["seq"] = self._sequence
                 # Pas d'horodatage : le boîtier n'a pas d'horloge fiable, c'est
                 # le serveur qui date à la réception.
-                self.mqtt.publish(topics.telemetry(self.device_id), data)
+                self.mqtt.publish(topics.telemetry(self.device_id), snapshot)
             await asyncio.sleep(self.telemetry_interval)
 
     async def _listen_task(self):
@@ -357,51 +353,34 @@ class GrowHubController:
                     self._announce()
             await asyncio.sleep(10)
 
+    async def _snapshot(self, retries=3):
+        """Dernière mesure de chaque capteur, dans la forme publiée sur MQTT.
+
+        Une seule lecture sert l'écran et la télémétrie : partager cette photo
+        évite de solliciter deux fois le même capteur par cycle.
+        """
+        snapshot = {"sensors": {}, "actuators": self._actuator_states()}
+        for sensor_id, sensor in self.sensors.items():
+            reading = await self._read_sensor(sensor, retries=retries)
+            if reading is not None:
+                snapshot["sensors"][sensor_id] = reading
+        return snapshot
+
     async def _display_task(self):
-        """Affiche l'appairage, puis la télémétrie, sur l'écran OLED."""
+        """Montre l'appairage tant qu'il dure, l'instantané des mesures ensuite."""
         if self.display is None:
             return
         while True:
             try:
                 if self.pairing:
-                    self._render_pairing()
+                    self.screen.draw_pairing(
+                        self.display, self.device_id, self.pairing_code
+                    )
                 else:
-                    await self._render_telemetry()
+                    self.screen.draw(self.display, await self._snapshot(retries=1))
             except Exception as e:
                 print(f"Erreur d'affichage : {e}")
             await asyncio.sleep(2)
-
-    def _render_pairing(self):
-        display = self.display
-        if display is None:
-            return
-        display.clear()
-        display.text("BOURGEON", 0, 0)
-        display.text("Code : " + str(self.pairing_code or "----"), 0, 20)
-        display.text(self.device_id, 0, 40)
-        display.show()
-
-    async def _render_telemetry(self):
-        if self.display is None:
-            return
-        temperature = None
-        humidity = None
-        for sensor in self.sensors.values():
-            data = await self._read_sensor(sensor, retries=1)
-            if not data:
-                continue
-            if "temperature" in data:
-                temperature = data["temperature"]["value"]
-                humidity = data.get("humidity", {}).get("value")
-
-        self.display.clear()
-        self.display.text("BOURGEON", 0, 0)
-        if temperature is not None and humidity is not None:
-            self.display.text(f"Temp: {temperature} C", 0, 25)
-            self.display.text(f"Hum: {humidity}%", 0, 45)
-        else:
-            self.display.text("Erreur Capteur", 0, 25)
-        self.display.show()
 
     async def run(self):
         """Point d'entrée de la boucle asyncio.
