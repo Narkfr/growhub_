@@ -16,10 +16,16 @@ dependencies = [
 where = ["."]
 include = ["firmware*", "gateway*", "dashboard*"]
 
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "growhub.settings"
+pythonpath = ["gateway/backend"]
+testpaths = ["tests", "gateway/backend"]
+filterwarnings = ["error::DeprecationWarning"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-extend-exclude = ["firmware/lib/*.py"]
+extend-exclude = ["firmware/lib/*.py", "**/migrations/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

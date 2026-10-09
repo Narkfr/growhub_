@@ -1,3 +1,5 @@
+# LEGACY (v0.1) — pile Flask + InfluxDB, retiree au jalon M7 de PLAN.md.
+# La pile v2 vit dans requirements/common.txt + requirements/dev.txt.
 # Gateway runtime
 paho-mqtt==2.1.0
 python-dotenv==1.2.1

@@ -13,23 +13,67 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install ruff
-        run: pip install "ruff==0.15.0"
+        run: pip install "ruff==0.16.10"
       - name: Ruff check
         run: ruff check .
       - name: Ruff format check
         run: ruff format --check .
 
-  test:
-    name: Tests (pytest)
+  backend:
+    name: Tests (pytest + PostgreSQL)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: growhub
+          POSTGRES_USER: growhub
+          POSTGRES_PASSWORD: growhub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U growhub"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-a-secret
+      DJANGO_DEBUG: "0"
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: growhub
+      POSTGRES_USER: growhub
+      POSTGRES_PASSWORD: growhub
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - name: Install dependencies
-        run: pip install "pytest==9.0.2"
+        run: pip install -r requirements/dev.txt
+      - name: Check migrations are up to date
+        run: python gateway/backend/manage.py makemigrations --check --dry-run
       - name: Run tests
         run: python -m pytest -q
+
+  frontend:
+    name: Front (vitest + typecheck)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gateway/frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test

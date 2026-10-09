@@ -1,0 +1,8 @@
+# Runtime dependencies of the GrowHub gateway (Django backend).
+# Install with: venv/bin/pip install -r requirements/dev.txt
+Django==5.2.18
+djangorestframework==3.18.3
+psycopg[binary]==3.3.6
+paho-mqtt==2.1.0
+python-dotenv==1.2.1
+uvicorn[standard]==0.54.0
