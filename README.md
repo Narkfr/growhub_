@@ -2,6 +2,12 @@
 
 An automated monitoring and control system for indoor cultivation. This project leverages a modern IoT architecture with a distributed Edge-to-Gateway approach, focused on reliability and data persistence.
 
+> **Chantier v2 en cours** — migration vers Django 5.2 + PostgreSQL unique, comptes
+> utilisateurs et objets connectés **Bourgeon**. Voir [PLAN.md](PLAN.md),
+> [docs/architecture.md](docs/architecture.md) et
+> [docs/mqtt-topics.md](docs/mqtt-topics.md).
+> La description ci-dessous correspond à la version **v0.1** actuellement déployée.
+
 ---
 
 ## 🚀 System Architecture
