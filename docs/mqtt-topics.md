@@ -25,7 +25,28 @@ table d'ACL, afin que les appareils déjà déployés continuent de fonctionner.
 Conventions : `ts` en ISO 8601 UTC, `seq` croissant depuis le boot (détection de trous),
 QoS 0 partout (la télémétrie est périodique, `retain` porte l'état), payloads JSON UTF-8.
 
-## ACL Mosquitto (une entrée par appareil)
+## ACL Mosquitto
+
+Le fichier est **généré** par `gateway/backend/telemetry/mosquitto.py` (jamais édité à la
+main) et le broker le recharge sur SIGHUP. Forme réelle :
+
+```conf
+user growhub_api
+topic read growhub/v1/+/info        # … telemetry, state, status, ack
+topic write growhub/v1/+/cmd/#
+topic readwrite growhub/v1/provision/#
+
+# Tout appareil appairé : son propre préfixe uniquement (username == device_id)
+pattern write growhub/v1/%u/info    # … telemetry, state, status, ack
+pattern read growhub/v1/%u/cmd/#
+
+# Compte d'amorçage, présent seulement pendant l'appairage
+user boot-<device_id>
+topic write growhub/v1/provision/<device_id>
+topic read  growhub/v1/provision/<device_id>/creds
+```
+
+Détail historique (une entrée par appareil) conservé pour référence :
 
 ```
 user <device_id>

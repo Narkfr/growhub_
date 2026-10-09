@@ -240,6 +240,14 @@ class MqttCredential(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    installed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Prouvé par le premier message reçu avec ces identifiants.",
+    )
+    bootstrap_revoked_at = models.DateTimeField(
+        null=True, blank=True, help_text="Compte d'amorçage révoqué."
+    )
     last_used_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

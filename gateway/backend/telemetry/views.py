@@ -11,14 +11,17 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_datetime
 from django.views import View
+from growhub import topics
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import provisioning
 from .models import CommandAudit, Telemetry
 from .mqtt import MqttPublisher
+from .provisioning import ProvisioningError
 from .serializers import (
     CommandAuditSerializer,
     CommandRequestSerializer,
@@ -173,6 +176,50 @@ class DeviceCommandView(APIView):
             )
         return Response(
             CommandAuditSerializer(audit).data, status=status.HTTP_201_CREATED
+        )
+
+
+class DeviceProvisionView(APIView):
+    """Hand real MQTT credentials to a paired device (staff only).
+
+    The clear-text password is returned once, here, and published to the device
+    on its provisioning topic. The database keeps the broker hash only.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        device = get_object_or_404(Device, pk=pk)
+        try:
+            credential, password = provisioning.provision_device(device)
+        except ProvisioningError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "device_id": device.device_id,
+                "username": credential.username,
+                "password": password,
+                "broker": settings.MQTT_BROKER,
+                "port": settings.MQTT_PORT,
+                "topic": topics.provision_credentials_topic(device.device_id),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DeviceProvisionRevokeView(APIView):
+    """Cut a device off the broker (staff only)."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        device = get_object_or_404(Device, pk=pk)
+        credential = provisioning.revoke_credentials(device)
+        return Response(
+            {
+                "device_id": device.device_id,
+                "revoked_at": credential.revoked_at if credential else None,
+            }
         )
 
 

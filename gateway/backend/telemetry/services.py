@@ -179,16 +179,36 @@ def handle_message(topic, payload, received_at=None):
         raise IngestError(f"appareil inconnu: {device_id}")
 
     if leaf == "telemetry":
-        return "telemetry", record_telemetry(device, body, received_at)
+        result = record_telemetry(device, body, received_at)
+        _confirm_credentials_if_pending(device)
+        return "telemetry", result
     if leaf == "state":
         return "state", record_state(device, body, received_at)
     if leaf == "status":
         return "status", record_status(device, body, received_at)
     if leaf == "info":
-        return "info", record_info(device, body)
+        result = record_info(device, body)
+        _confirm_credentials_if_pending(device)
+        return "info", result
     if leaf == "ack":
         return "ack", record_ack(body)
     raise IngestError(f"topic non géré: {topic}")
+
+
+def _confirm_credentials_if_pending(device):
+    """Finish a pairing handover when the device shows up with its own account.
+
+    Imported lazily: provisioning imports this module's siblings, and we do not
+    want an import cycle at module load time.
+    """
+    from . import provisioning
+
+    try:
+        provisioning.maybe_confirm_credentials(device)
+    except Exception:  # broker hiccup must never lose a telemetry message
+        logger.exception(
+            "échec de la confirmation des identifiants de %s", device.device_id
+        )
 
 
 def handle_provision_message(topic, body):

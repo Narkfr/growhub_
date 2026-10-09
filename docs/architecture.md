@@ -95,8 +95,10 @@ Rétention télémétrie : 24 mois brutes, agrégats horaires au-delà (purge pl
 
 ## 6. Sécurité
 
-- Un utilisateur broker Mosquitto **par appareil** (`device_id`), ACL limitée à son préfixe ;
-  un appareil ne peut donc ni lire ni écrire chez un autre (voir `docs/mqtt-topics.md`).
+- Un utilisateur broker Mosquitto **par appareil** (`device_id`) ; les ACL sont générées
+  automatiquement (`telemetry/mosquitto.py`) et reposent sur les motifs `%u`, donc un
+  appareil ne peut ni lire ni écrire chez un autre (voir `docs/mqtt-topics.md`).
+  Matrice vérifiée contre un vrai broker par `tools/mqtt_acl_check.sh`.
 - Comptes de service séparés : `growhub_api` (lecture totale, écriture des commandes) et
   le compte de provisioning, révoqué dès que l'appareil est appairé.
 - Web : session + CSRF, `HttpOnly`/`SameSite=Lax`, HTTPS dès qu'exposé hors LAN.

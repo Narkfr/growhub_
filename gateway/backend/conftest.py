@@ -7,6 +7,20 @@ from telemetry.services import CommandDispatcher
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def isolated_broker_dir(tmp_path, settings):
+    """Never let a test touch gateway/mosquitto/config.
+
+    Every test gets its own broker config directory and no reload command.
+    """
+    settings.GROWHUB = {
+        **settings.GROWHUB,
+        "MOSQUITTO_CONFIG_DIR": str(tmp_path / "mosquitto"),
+        "MQTT_RELOAD_COMMAND": "",
+    }
+    return tmp_path / "mosquitto"
+
+
 @pytest.fixture
 def user(db):
     return User.objects.create_user(
@@ -77,6 +91,13 @@ class FakePublisher:
 @pytest.fixture
 def publisher():
     return FakePublisher()
+
+
+@pytest.fixture(autouse=True)
+def no_real_mqtt(monkeypatch, publisher):
+    """No test ever opens a socket to a broker: every publisher is the fake one."""
+    monkeypatch.setattr("telemetry.mqtt.MqttPublisher", lambda **kwargs: publisher)
+    return publisher
 
 
 @pytest.fixture

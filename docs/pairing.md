@@ -20,11 +20,26 @@ dans l'interface.
    refuse un code déjà utilisé, crée le `Device`, la `Membership(role=owner)` et
    `DeviceCapability` à partir du topic `info`.
 4. **Provisioning.** Le serveur génère les creds définitives (`username = device_id`,
-   mot de passe aléatoire), les ajoute au fichier de mots de passe Mosquitto et aux ACL,
-   puis publie en retained `growhub/v1/provision/<device_id>/creds`, et efface ce retained
-   une fois le `ack` reçu.
-5. **Bascule.** Le Bourgeon écrit `/creds.json`, redémarre en mode normal (topics
-   `growhub/v1/<device_id>/...`), et le serveur révoque `boot-<device_id>`.
+   mot de passe aléatoire), écrit le fichier de mots de passe et le fichier d'ACL
+   (`telemetry/mosquitto.py`, hachage PBKDF2-SHA512 vérifié contre `mosquitto_passwd`),
+   recharge le broker (SIGHUP) puis publie en retained
+   `growhub/v1/provision/<device_id>/creds`. Le mot de passe en clair n'existe qu'ici,
+   dans le fichier du broker et dans ce message : la base ne garde que l'empreinte.
+5. **Bascule.** Le Bourgeon écrit `/creds.json` et redémarre en mode normal. Sa **première**
+   trame sur `growhub/v1/<device_id>/...` prouve qu'il a bien reçu les creds :
+   le serveur efface alors le retained (mot de passe plus rejouable) et supprime le compte
+   `boot-<device_id>` du fichier de mots de passe et des ACL.
+
+Côté Mosquitto, l'isolation repose sur les motifs : `pattern write growhub/v1/%u/telemetry`
+et `pattern read growhub/v1/%u/cmd/#`, où `%u` est le nom d'utilisateur — qui est
+l'identifiant matériel. Aucune entrée par appareil n'est nécessaire pour les Bourgeons
+appairés ; seuls les comptes d'amorçage ont des entrées explicites, retirées à l'appairage.
+
+Vérification avant déploiement :
+
+```bash
+tools/mqtt_acl_check.sh   # broker jetable sur un port dédié, 12 contrôles ACL/authentification
+```
 
 ## Sécurité et cas limites
 

@@ -144,6 +144,16 @@ GROWHUB = {
     "PAIRING_MAX_ATTEMPTS": int(os.environ.get("GROWHUB_PAIRING_MAX_ATTEMPTS", "5")),
     # Hardware device id prefix, e.g. ghb-3f2a91.
     "DEVICE_ID_PREFIX": os.environ.get("GROWHUB_DEVICE_ID_PREFIX", "ghb-"),
+    # Mosquitto administration (password_file / acl_file live in the broker config dir).
+    "MOSQUITTO_CONFIG_DIR": os.environ.get(
+        "GROWHUB_MOSQUITTO_CONFIG_DIR", str(GATEWAY_DIR / "mosquitto" / "config")
+    ),
+    "MOSQUITTO_PASSWORD_FILE": os.environ.get(
+        "GROWHUB_MOSQUITTO_PASSWORD_FILE", "password_file"
+    ),
+    "MOSQUITTO_ACL_FILE": os.environ.get("GROWHUB_MOSQUITTO_ACL_FILE", "acl_file"),
+    # Reload hook: Mosquitto re-reads its files on SIGHUP. Empty = no reload.
+    "MQTT_RELOAD_COMMAND": os.environ.get("GROWHUB_MQTT_RELOAD_COMMAND", ""),
     # How often the SSE stream re-reads the database (seconds).
     "LIVE_POLL_SECONDS": float(os.environ.get("GROWHUB_LIVE_POLL_SECONDS", "2")),
     # A device with no message for this long is shown as offline.
