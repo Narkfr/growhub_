@@ -2,64 +2,68 @@
 
 import { useEffect, useState } from 'react';
 
-import type { StatePayload } from '@/lib/types';
+import type { LiveSnapshot, User } from '@growhub/client';
+import { GrowHubError } from '@growhub/client';
 
-const POLL_INTERVAL_MS = 5000;
+import { apiClient } from '@/lib/client';
+
+/** Message affichable pour n'importe quelle erreur remontée par le client. */
+export function messageOf(error: unknown): string {
+  if (error instanceof GrowHubError) return error.message;
+  return "Impossible de joindre l'API.";
+}
 
 /**
- * Live device state: opens an SSE stream for instant updates and falls back
- * to polling when the stream drops (e.g. through a buffering proxy).
+ * État temps réel de tous les Bourgeons visibles par l'utilisateur.
+ *
+ * Le client partagé choisit le transport : flux SSE dans le navigateur
+ * (rafraîchissement serveur toutes les 2 s), sondage ailleurs. L'écran ne sait
+ * pas lequel est utilisé, et n'a donc rien à changer pour le mobile.
  */
 export function useLiveState() {
-  const [state, setState] = useState<StatePayload | null>(null);
+  const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let es: EventSource | null = null;
-    let poll: ReturnType<typeof setInterval> | null = null;
-
-    async function fetchState() {
-      try {
-        const res = await fetch('/api/state');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setState(await res.json());
+    return apiClient().subscribeLive(
+      (next) => {
+        setSnapshot(next);
+        setConnected(true);
         setError(null);
-      } catch {
-        setError("Impossible de joindre l'API.");
-      }
-    }
+      },
+      (caught) => {
+        setConnected(false);
+        setError(messageOf(caught));
+      },
+    );
+  }, []);
 
-    fetchState();
+  return { snapshot, connected, error };
+}
 
-    es = new EventSource('/api/stream');
-    es.onopen = () => {
-      setConnected(true);
-      setError(null);
-      if (poll) {
-        clearInterval(poll);
-        poll = null;
-      }
-    };
-    es.onmessage = (event) => {
-      try {
-        setState(JSON.parse(event.data));
-      } catch {
-        /* ignore malformed frame */
-      }
-    };
-    es.onerror = () => {
-      setConnected(false);
-      if (!poll) {
-        poll = setInterval(fetchState, POLL_INTERVAL_MS);
-      }
-    };
+/** Profil courant, ou `null` : une session expirée renvoie sur /login. */
+export function useSession() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    let cancelled = false;
+    apiClient()
+      .me()
+      .then((profile) => {
+        if (!cancelled) setUser(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
-      es?.close();
-      if (poll) clearInterval(poll);
+      cancelled = true;
     };
   }, []);
 
-  return { state, connected, error };
+  return { user, loading };
 }

@@ -58,6 +58,26 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+  client:
+    name: Client partagé (typecheck + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/growhub-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/growhub-client/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+
   frontend:
     name: Front (vitest + typecheck)
     runs-on: ubuntu-latest
