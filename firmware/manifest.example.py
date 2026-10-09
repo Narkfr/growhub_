@@ -5,9 +5,8 @@
 # (it is gitignored).
 
 MANIFEST = {
-    # Used as a prefix: app.py appends a unique suffix from
-    # machine.unique_id() so multiple GrowHubs don't collide on MQTT.
-    "client_id": "GrowHubClient",
+    # Nom du modèle annoncé au serveur (topic info).
+    "model": "Bourgeon V1",
     "display": {
         "type": "ssd1306",
         "width": 128,

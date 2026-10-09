@@ -20,17 +20,22 @@ from telemetry.provisioning import (
 
 
 def render_secrets_snippet(device_id, username, password, broker, port, pairing_code):
-    """The MQTT section of the firmware's ``secrets.py``."""
+    """The firmware's ``secrets.py`` entries, key names included.
+
+    The keys mirror ``firmware/secrets.example.py``: the firmware reads
+    ``WIFI_SSID``, ``MQTT_BROKER``… in upper case, so generating lower-case
+    keys here would silently leave the device unconfigured.
+    """
     body = ", ".join(
         [
-            '"ssid": ""',
-            '"password": ""',
-            f'"mqtt_broker": "{broker}"',
-            f'"mqtt_port": {port}',
-            f'"mqtt_user": "{username}"',
-            f'"mqtt_password": "{password}"',
-            f'"device_id": "{device_id}"',
-            f'"pairing_code": "{pairing_code}"',
+            '"WIFI_SSID": ""',
+            '"WIFI_PASSWORD": ""',
+            f'"MQTT_BROKER": "{broker}"',
+            f'"MQTT_PORT": {port}',
+            f'"MQTT_USER": "{username}"',
+            f'"MQTT_PASSWORD": "{password}"',
+            f'"DEVICE_ID": "{device_id}"',
+            f'"PAIRING_CODE": "{pairing_code}"',
         ]
     )
     return f"secrets = {{{body}}}\n"

@@ -22,16 +22,18 @@ le travail se fait dans une branche par jalon, `hermes` reste la branche d'inté
 
 - [x] **M0** — merge `hermes` → `main`, tag `v0.1`
 - [x] **M1** — documents de conception (`docs/architecture.md`, `docs/mqtt-topics.md`, `docs/pairing.md`, ADR)
-- [ ] **M2** — socle Django : `accounts`, `devices`, memberships, admin, API DRF, tests
-- [ ] **M3** — télémétrie PostgreSQL + flux live (SSE) + pont MQTT (worker)
+- [x] **M2** — socle Django : `accounts`, `devices`, memberships, admin, API DRF, tests
+- [x] **M3** — télémétrie PostgreSQL + flux live (SSE) + pont MQTT (worker)
 - [x] **M4** — appairage Bourgeon : `/claim`, ACL, provisioning des creds
-- [ ] **M5** — firmware v2 : `device_id` = `machine.unique_id()`, topic `info`, topic de config, code d'appairage à l'écran
+- [x] **M5** — firmware v2 : `device_id` = `machine.unique_id()`, topic `info`, topic de config, code d'appairage à l'écran
 - [ ] **M6** — front Next : login, liste des Bourgeons, partage, dashboard live
 - [ ] **M7** — infra : retrait de Flask / InfluxDB / Adminer, compose et unités systemd revus, sauvegardes
 - [ ] **M8** — CI/CD : runner self-hosted, jobs build + deploy, runbook et rollback
 - [ ] **M9** — documentation finale, CHANGELOG, dépendances à jour
 
 Tags prévus : `v0.2` après M4 (back + appairage), `v0.3` après M6, `v1.0` après M8 (fin de migration).
+`v0.2` est posé sur `main` après M4 ; M5 (firmware) ne change rien à ce que le serveur expose,
+il n'ajoute donc pas de tag.
 
 ## Conventions techniques
 
@@ -45,6 +47,13 @@ Tags prévus : `v0.2` après M4 (back + appairage), `v0.3` après M6, `v1.0` apr
 
 - **2026-10-09 — M0** : `hermes` (36 commits) mergée dans `main` en `--no-ff` (`fdee1c6`), tag annoté `v0.1` poussé. CI relancée sur `main`.
 - **2026-10-09 — M1** : conception écrite (architecture, contrat MQTT, flux d'appairage, 5 ADR).
+- **2026-10-09 — M5** : firmware sur le contrat v1 — identifiant `ghb-xxxxxx` dérivé des
+  6 derniers hexadécimaux du matériel (les octets de tête sont communs aux Pico W de la série),
+  topics centralisés dans `src/topics.py`, mode appairage (annonce retained, attente des
+  identifiants, écriture de `creds.json`, redémarrage) et code affiché à l'écran, `ack` avec
+  `cmd_id` et un motif de refus, configuration à chaud bornée, télémétrie `{seq,sensors,actuators}`
+  sans horodatage (le boîtier n'a pas d'horloge). Test de contrat firmware↔serveur ajouté ;
+  il a fait apparaître une divergence réelle sur la forme de `state` dans l'`ack`.
 - **2026-10-09 — M4** : provisioning réel — hachage PBKDF2 vérifié contre `mosquitto_passwd`,
   ACL par motifs `%u` générées et rechargées à chaud, publication des creds en retained puis
   effacement à la première trame du boîtier, révocation du compte d'amorçage, commande
