@@ -5,7 +5,12 @@ c'est ce qui garantit qu'un appareil ne peut pas se faire passer pour un autre
 en changeant un fichier de configuration.
 """
 
-from constants import CREDENTIALS_PATH, DEVICE_ID_PREFIX
+from constants import (
+    CREDENTIALS_PATH,
+    DEVICE_ID_HEX_LENGTH,
+    DEVICE_ID_PREFIX,
+    MQTT_DEFAULT_PORT,
+)
 
 
 def _hexlify(value):
@@ -31,7 +36,7 @@ def derived_device_id(unique_id=None):
         import machine
 
         unique_id = machine.unique_id()
-    return DEVICE_ID_PREFIX + _hexlify(unique_id)[-6:]
+    return DEVICE_ID_PREFIX + _hexlify(unique_id)[-DEVICE_ID_HEX_LENGTH:]
 
 
 def resolve_device_id(secrets):
@@ -79,5 +84,5 @@ def credentials_from_secrets(secrets):
         "username": secrets.get("MQTT_USER"),
         "password": secrets.get("MQTT_PASSWORD"),
         "broker": secrets.get("MQTT_BROKER"),
-        "port": int(secrets.get("MQTT_PORT", 1883)),
+        "port": int(secrets.get("MQTT_PORT", MQTT_DEFAULT_PORT)),
     }

@@ -1,4 +1,5 @@
 import dht
+from constants import HUMIDITY_MAX_PERCENT, HUMIDITY_MIN_PERCENT
 from machine import Pin
 
 from .base import BaseSensor
@@ -30,8 +31,10 @@ class ClimateSensor(BaseSensor):
             if not isinstance(temp, (int, float)):  # noqa: UP038
                 raise ValueError(f"Invalid temperature: {temp}")
 
-            # Validate humidity is between 0 and 100
-            if not isinstance(hum, (int, float)) or not (0 <= hum <= 100):  # noqa: UP038
+            # Validate humidity is within plausible bounds
+            if not isinstance(hum, (int, float)) or not (  # noqa: UP038
+                HUMIDITY_MIN_PERCENT <= hum <= HUMIDITY_MAX_PERCENT
+            ):
                 raise ValueError(f"Invalid humidity: {hum}")
 
             return {

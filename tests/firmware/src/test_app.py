@@ -111,17 +111,18 @@ _sensor_classes = types.ModuleType("src.sensors.sensor_classes")
 _sensor_classes.SENSOR_CLASSES = {"csmsv2": FakeSensor, "dht11": FakeSensor}
 sys.modules["src.sensors.sensor_classes"] = _sensor_classes
 
-_display = types.ModuleType("src.display")
-_display.Display = MagicMock()
-sys.modules["src.display"] = _display
+# `src.display` (Display simulé + vrai ScreenLayout) vient de conftest.py.
 
 from src.app import GrowHubController  # noqa: E402
 
 DEVICE = "ghb-3f2a91"
 BOOTSTRAP_USER = "boot-ghb-3f2a91"
 
+DISPLAY_CONFIG = {"type": "ssd1306", "width": 128, "height": 64}
+
 MANIFEST = {
     "model": "Bourgeon V1",
+    "display": DISPLAY_CONFIG,
     "actuators": [{"id": "Pump", "pin": 18, "active_low": True}],
     "buttons": [{"id": "PumpButton", "pin": 14, "target": "Pump"}],
     "sensors": [
@@ -588,23 +589,30 @@ def test_paired_device_does_not_announce_pairing(controller):
 
 
 def test_setup_display_when_configured(tmp_path):
-    _display.Display.reset_mock()
-    display_cfg = {"type": "ssd1306", "width": 128, "height": 64}
+    display_module = sys.modules["src.display"]
+    display_module.Display.reset_mock()
+    c = GrowHubController(MANIFEST, SECRETS, credentials_path=_creds_path(tmp_path))
+    assert c.display is display_module.Display.return_value
+    display_module.Display.assert_called_once_with(DISPLAY_CONFIG)
+    # L'écran sait quoi montrer à partir du seul manifeste.
+    assert c.screen.per_page == 2
+
+
+def test_setup_display_absent(tmp_path):
+    without_display = {k: v for k, v in MANIFEST.items() if k != "display"}
     c = GrowHubController(
-        dict(MANIFEST, display=display_cfg),
-        SECRETS,
-        credentials_path=_creds_path(tmp_path),
+        without_display, SECRETS, credentials_path=_creds_path(tmp_path)
     )
-    assert c.display is _display.Display.return_value
-    _display.Display.assert_called_once_with(display_cfg)
+    assert c.display is None
+    assert c.screen is None
 
 
-def test_setup_display_absent(controller):
-    assert controller.display is None
-
-
-def test_display_task_returns_when_no_display(controller):
-    asyncio.run(controller._display_task())
+def test_display_task_returns_when_no_display(tmp_path):
+    without_display = {k: v for k, v in MANIFEST.items() if k != "display"}
+    c = GrowHubController(
+        without_display, SECRETS, credentials_path=_creds_path(tmp_path)
+    )
+    asyncio.run(c._display_task())
 
 
 def test_display_task_shows_pairing_code(unpaired):
@@ -618,11 +626,12 @@ def test_display_task_shows_pairing_code(unpaired):
     unpaired.display.show.assert_called_once()
 
 
-def test_display_task_renders_temperature(controller):
+def test_display_task_renders_the_manifest_fields(controller):
+    """Les champs viennent du manifeste : le contrôleur ignore ce qu'il affiche."""
     controller.display = MagicMock()
     controller.sensors["Climate"].read.return_value = {
-        "temperature": {"value": 21.5},
-        "humidity": {"value": 55},
+        "temperature": {"value": 21.5, "unit": "celsius"},
+        "humidity": {"value": 55, "unit": "percent"},
     }
     with patch("asyncio.sleep", _break_sleep):
         with pytest.raises(_LoopBreak):
@@ -630,19 +639,55 @@ def test_display_task_renders_temperature(controller):
 
     controller.display.clear.assert_called_once()
     controller.display.text.assert_any_call("BOURGEON", 0, 0)
-    controller.display.text.assert_any_call("Temp: 21.5 C", 0, 25)
-    controller.display.text.assert_any_call("Hum: 55%", 0, 45)
+    controller.display.text.assert_any_call("Temp: 21.5 °C", 0, 20)
+    controller.display.text.assert_any_call("Hum: 55 %", 0, 40)
     controller.display.show.assert_called_once()
 
 
-def test_display_task_shows_error_when_no_temperature(controller):
+def test_display_task_shows_a_dash_for_a_missing_measure(controller):
+    # Un capteur muet n'efface plus tout l'écran : seule sa ligne manque.
     controller.display = MagicMock()
     for sensor in controller.sensors.values():
-        sensor.read.return_value = {"moisture": {"value": 40}}
+        sensor.read.return_value = {"moisture": {"value": 40, "unit": "percent"}}
     with patch("asyncio.sleep", _break_sleep):
         with pytest.raises(_LoopBreak):
             asyncio.run(controller._display_task())
-    controller.display.text.assert_any_call("Erreur Capteur", 0, 25)
+    controller.display.text.assert_any_call("Temp: --", 0, 20)
+    controller.display.text.assert_any_call("Hum: --", 0, 40)
+    controller.display.text.assert_any_call("BOURGEON", 0, 0)
+
+
+def test_display_task_follows_an_explicit_field_list(tmp_path):
+    manifest = dict(
+        MANIFEST,
+        display=dict(
+            DISPLAY_CONFIG,
+            fields=[
+                {
+                    "source": "Soil",
+                    "metric": "moisture",
+                    "label": "Sol",
+                    "decimals": 0,
+                },
+                {"kind": "actuator", "source": "Pump", "label": "Pompe"},
+            ],
+        ),
+    )
+    creds = Path(_creds_path(tmp_path))
+    creds.write_text(_json.dumps(STORED_CREDENTIALS))  # boîtier appairé
+    c = GrowHubController(manifest, SECRETS, credentials_path=str(creds))
+    c.display = MagicMock()
+    c.sensors["Soil"].read.return_value = {
+        "moisture": {"value": 42.4, "unit": "percent"}
+    }
+    c.actuators["Pump"].human_state.return_value = "ON"
+
+    with patch("asyncio.sleep", _break_sleep):
+        with pytest.raises(_LoopBreak):
+            asyncio.run(c._display_task())
+
+    c.display.text.assert_any_call("Sol: 42 %", 0, 20)
+    c.display.text.assert_any_call("Pompe: Allumé", 0, 40)
 
 
 # --- lectures capteurs -------------------------------------------------------

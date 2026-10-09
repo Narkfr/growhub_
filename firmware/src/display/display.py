@@ -1,3 +1,12 @@
+from constants import (
+    DISPLAY_DEFAULT_ADDR,
+    DISPLAY_DEFAULT_HEIGHT,
+    DISPLAY_DEFAULT_WIDTH,
+    DISPLAY_I2C_FREQ,
+    DISPLAY_I2C_ID,
+    DISPLAY_I2C_SCL,
+    DISPLAY_I2C_SDA,
+)
 from lib.ssd1306 import SSD1306_I2C
 from machine import I2C, Pin
 
@@ -19,16 +28,16 @@ class Display:
     def __init__(self, config):
         i2c_cfg = config.get("i2c", {})
         self.i2c = I2C(
-            i2c_cfg.get("id", 0),
-            scl=Pin(i2c_cfg.get("scl", 5)),
-            sda=Pin(i2c_cfg.get("sda", 4)),
-            freq=i2c_cfg.get("freq", 400000),
+            i2c_cfg.get("id", DISPLAY_I2C_ID),
+            scl=Pin(i2c_cfg.get("scl", DISPLAY_I2C_SCL)),
+            sda=Pin(i2c_cfg.get("sda", DISPLAY_I2C_SDA)),
+            freq=i2c_cfg.get("freq", DISPLAY_I2C_FREQ),
         )
         self.oled = SSD1306_I2C(
-            config.get("width", 128),
-            config.get("height", 64),
+            config.get("width", DISPLAY_DEFAULT_WIDTH),
+            config.get("height", DISPLAY_DEFAULT_HEIGHT),
             self.i2c,
-            addr=config.get("addr", 0x3C),
+            addr=config.get("addr", DISPLAY_DEFAULT_ADDR),
         )
 
     def clear(self):

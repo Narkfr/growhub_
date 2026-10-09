@@ -1,3 +1,4 @@
+from constants import SOIL_PERCENT_DECIMALS, SOIL_PERCENT_MAX, SOIL_PERCENT_MIN
 from machine import ADC, Pin
 
 from .base import BaseSensor
@@ -54,7 +55,10 @@ class SoilSensor(BaseSensor):
             / (self.calibration["wet"] - self.calibration["dry"])
             * 100
         )
-        percentage = max(0.0, min(100.0, round(percentage, 1)))
+        percentage = max(
+            SOIL_PERCENT_MIN,
+            min(SOIL_PERCENT_MAX, round(percentage, SOIL_PERCENT_DECIMALS)),
+        )
 
         return percentage
 

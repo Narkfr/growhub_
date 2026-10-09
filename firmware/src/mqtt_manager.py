@@ -6,6 +6,12 @@ délimite ce que l'appareil peut lire et écrire.
 """
 
 import ujson
+from constants import (
+    MQTT_CONNECT_TIMEOUT_SECONDS,
+    MQTT_DEFAULT_PORT,
+    MQTT_KEEPALIVE_SECONDS,
+    MQTT_QOS,
+)
 from lib.umqtt.simple import MQTTClient
 from src import topics
 
@@ -14,7 +20,13 @@ class MqttManager:
     """Connexion, abonnements et publication JSON."""
 
     def __init__(
-        self, device_id, broker_ip, user, password, port=1883, connect_timeout=5
+        self,
+        device_id,
+        broker_ip,
+        user,
+        password,
+        port=MQTT_DEFAULT_PORT,
+        connect_timeout=MQTT_CONNECT_TIMEOUT_SECONDS,
     ):
         self.device_id = device_id
         self.broker_ip = broker_ip
@@ -26,7 +38,7 @@ class MqttManager:
             user=user,
             password=password,
             port=port,
-            keepalive=60,
+            keepalive=MQTT_KEEPALIVE_SECONDS,
         )
         self.connected = False
         self.status_topic = topics.status(device_id)
@@ -76,7 +88,7 @@ class MqttManager:
         except Exception:
             self.connected = False
 
-    def publish(self, topic, data, retain=False, qos=0):
+    def publish(self, topic, data, retain=False, qos=MQTT_QOS):
         """Publie un dictionnaire en JSON (ou une charge utile déjà encodée).
 
         Le QoS reste à 0 : en QoS 1, ``umqtt.simple`` bloque en attendant le

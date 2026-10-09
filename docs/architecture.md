@@ -9,6 +9,14 @@ le jalon M7 n'est pas passé).
 | Couche | Technologie | Rôle |
 | :--- | :--- | :--- |
 | Objet connecté (**Bourgeon**) | Raspberry Pi Pico W / MicroPython | Lecture capteurs, pilotage actionneurs, écran OLED, MQTT. |
+
+L'écran du boîtier est **décrit par le manifeste** (`display.fields`) : chaque entrée
+nomme une mesure (`source`, `metric`, `label`, `decimals`) ou un actionneur
+(`kind: "actuator"`). Le contrôleur ne connaît aucune grandeur en particulier : il
+publie un instantané des capteurs et `src/display/screen.py` en fait des lignes.
+Sans `fields`, on retombe sur température et humidité du premier capteur qui les
+publie. Deux lignes tiennent sous le titre sur un 128x64 ; au-delà, l'affichage
+tourne par pages.
 | Transport | MQTT (Mosquitto) | Télémétrie montante, commandes descendantes, statut, appairage. |
 | Application | **Django 5.2 LTS + DRF** (ASGI) | Auth, utilisateurs, appareils, API REST, flux live SSE, admin. |
 | Pont machine | worker Python (client paho) | MQTT ↔ base, commandes ↔ audit, moteur d'automatisation (ITK). |
