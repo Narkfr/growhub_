@@ -23,6 +23,9 @@ sys.modules["ubinascii"] = _ubinascii
 
 _ujson = types.ModuleType("ujson")
 _ujson.dumps = _json.dumps
+_ujson.loads = _json.loads
+_ujson.load = _json.load
+_ujson.dump = _json.dump
 sys.modules["ujson"] = _ujson
 
 _dht = MagicMock()
@@ -46,7 +49,7 @@ _lib.__path__ = []
 _umqtt = types.ModuleType("lib.umqtt")
 _umqtt.__path__ = []
 _simple = types.ModuleType("lib.umqtt.simple")
-_simple.MQTTClient = MagicMock
+_simple.MQTTClient = MagicMock()
 _simple.MQTTException = type("MQTTException", (Exception,), {})
 sys.modules["lib"] = _lib
 sys.modules["lib.umqtt"] = _umqtt
@@ -114,8 +117,11 @@ sys.modules["src.display"] = _display
 
 from src.app import GrowHubController  # noqa: E402
 
+DEVICE = "ghb-3f2a91"
+BOOTSTRAP_USER = "boot-ghb-3f2a91"
+
 MANIFEST = {
-    "client_id": "GrowHubClient",
+    "model": "Bourgeon V1",
     "actuators": [{"id": "Pump", "pin": 18, "active_low": True}],
     "buttons": [{"id": "PumpButton", "pin": 14, "target": "Pump"}],
     "sensors": [
@@ -132,9 +138,17 @@ SECRETS = {
     "WIFI_SSID": "ssid",
     "WIFI_PASSWORD": "pw",
     "MQTT_BROKER": "broker",
-    "MQTT_USER": "u",
-    "MQTT_PASSWORD": "p",
+    "MQTT_USER": BOOTSTRAP_USER,
+    "MQTT_PASSWORD": "bootstrap-pw",
     "MQTT_PORT": 1883,
+    "DEVICE_ID": DEVICE,
+    "PAIRING_CODE": "ABC234",
+}
+STORED_CREDENTIALS = {
+    "username": DEVICE,
+    "password": "device-pw",
+    "broker": "broker",
+    "port": 1883,
 }
 
 
@@ -150,16 +164,71 @@ async def _break_sleep(*args, **kwargs):
     raise _LoopBreak()
 
 
+def _creds_path(tmp_path):
+    return str(tmp_path / "creds.json")
+
+
 @pytest.fixture
-def controller():
-    return GrowHubController(MANIFEST, SECRETS)
+def unpaired(tmp_path):
+    """Boîtier neuf : compte d'amorçage, aucun identifiant définitif."""
+    return GrowHubController(MANIFEST, SECRETS, credentials_path=_creds_path(tmp_path))
+
+
+@pytest.fixture
+def controller(tmp_path):
+    """Boîtier déjà appairé : identifiants définitifs sur la carte."""
+    path = Path(_creds_path(tmp_path))
+    path.write_text(_json.dumps(STORED_CREDENTIALS))
+    return GrowHubController(MANIFEST, SECRETS, credentials_path=str(path))
+
+
+def cmd_payload(action, **args):
+    return {"cmd_id": "c1", "action": action, "args": args}
+
+
+def topic(category):
+    return f"growhub/v1/{DEVICE}/cmd/{category}"
+
+
+def raw(payload):
+    return _json.dumps(payload).encode()
+
+
+# --- identité et mode --------------------------------------------------------
+
+
+def test_device_id_comes_from_secrets_when_provisioned(controller):
+    assert controller.device_id == DEVICE
+
+
+def test_device_id_derived_from_hardware_without_secrets(tmp_path):
+    c = GrowHubController(MANIFEST, {}, credentials_path=_creds_path(tmp_path))
+    assert c.device_id == "ghb-060708"
+
+
+def test_new_device_starts_in_pairing_mode(unpaired):
+    assert unpaired.pairing is True
+    assert unpaired.credentials["username"] == BOOTSTRAP_USER
+
+
+def test_paired_device_uses_stored_credentials(controller):
+    assert controller.pairing is False
+    assert controller.credentials["username"] == DEVICE
+
+
+def test_broker_client_built_with_current_credentials(unpaired, controller):
+    assert unpaired.mqtt.device_id == DEVICE
+    assert controller.mqtt.device_id == DEVICE
+    assert controller.mqtt.broker_ip == "broker"
+
+
+def test_credentials_topic_subscribed_only_while_pairing(unpaired, controller):
+    assert f"growhub/v1/provision/{DEVICE}/creds" in unpaired._subscriptions()
+    assert f"growhub/v1/provision/{DEVICE}/creds" not in controller._subscriptions()
+    assert topic("config") in controller._subscriptions()
 
 
 # --- construction ------------------------------------------------------------
-
-
-def test_client_id_derived_from_unique_id(controller):
-    assert controller.client_id == "GrowHubClient-0102030405060708"
 
 
 def test_setup_hardware_populates(controller):
@@ -174,114 +243,216 @@ def test_setup_hardware_passes_calibration(controller):
     assert soil.kwargs["calibration"] == {"dry": 50000, "wet": 18000}
 
 
-def test_setup_hardware_ignores_unknown_sensor_type():
+def test_setup_hardware_ignores_unknown_sensor_type(tmp_path):
     m = dict(MANIFEST, sensors=[{"id": "X", "type": "nope", "pin": 1}])
-    c = GrowHubController(m, SECRETS)
+    c = GrowHubController(m, SECRETS, credentials_path=_creds_path(tmp_path))
     assert c.sensors == {}
 
 
-def test_setup_hardware_active_low_default():
-    m = dict(
-        MANIFEST,
-        actuators=[{"id": "Pump", "pin": 18}],  # no active_low -> default True
-    )
-    c = GrowHubController(m, SECRETS)
+def test_setup_hardware_active_low_default(tmp_path):
+    m = dict(MANIFEST, actuators=[{"id": "Pump", "pin": 18}])
+    c = GrowHubController(m, SECRETS, credentials_path=_creds_path(tmp_path))
     assert c.actuators["Pump"].active_low is True
 
 
-# --- _on_message routing -----------------------------------------------------
+def test_telemetry_interval_default(controller):
+    assert controller.telemetry_interval == 30
 
 
-def test_on_message_actuator_on(controller):
-    controller._on_message(b"dev/actuators/Pump/action", b"on")
+# --- commandes d'actionneurs -------------------------------------------------
+
+
+def test_actuator_command_runs_the_action(controller):
+    controller._on_message(
+        topic("actuators").encode(), raw(cmd_payload("on", target="Pump"))
+    )
     controller.actuators["Pump"].on.assert_called_once()
 
 
-def test_on_message_actuator_feedback_topic(controller):
+def test_actuator_command_accepts_lower_and_upper_case(controller):
+    controller._on_message(topic("actuators"), cmd_payload("ON", target="Pump"))
+    controller.actuators["Pump"].on.assert_called_once()
+
+
+def test_actuator_command_publishes_retained_state(controller):
     controller.actuators["Pump"].human_state.return_value = "ON"
-    controller._on_message(b"dev/actuators/Pump/action", b"on")
-    topic = controller.mqtt.publish.call_args[0][0]
-    assert topic == f"{controller.client_id}/data/Pump/state"
+    controller._on_message(topic("actuators"), cmd_payload("on", target="Pump"))
+    published = {call[0][0]: call for call in controller.mqtt.publish.call_args_list}
+    state_call = published[f"growhub/v1/{DEVICE}/state"]
+    assert state_call[0][1] == {"actuators": {"Pump": "ON"}}
+    assert state_call[1]["retain"] is True
 
 
-def test_on_message_actuator_feedback_retained(controller):
-    controller._on_message(b"dev/actuators/Pump/action", b"on")
-    assert controller.mqtt.publish.call_args[1] == {"retain": True}
+def test_actuator_command_acks_success(controller):
+    controller.actuators["Pump"].human_state.return_value = "ON"
+    controller._on_message(topic("actuators"), cmd_payload("on", target="Pump"))
+    ack = controller.mqtt.publish.call_args_list[-1][0]
+    assert ack[0] == f"growhub/v1/{DEVICE}/ack"
+    assert ack[1] == {
+        "cmd_id": "c1",
+        "ok": True,
+        "error": "",
+        "state": {"actuators": {"Pump": "ON"}},
+    }
 
 
-def test_on_message_actuator_disallowed_action(controller):
-    controller._on_message(b"dev/actuators/Pump/action", b"explode")
+def test_actuator_command_refuses_unknown_action(controller):
+    controller._on_message(topic("actuators"), cmd_payload("explode", target="Pump"))
     controller.actuators["Pump"].on.assert_not_called()
-    controller.actuators["Pump"].off.assert_not_called()
+    ack = controller.mqtt.publish.call_args_list[-1][0][1]
+    assert ack["ok"] is False
 
 
-def test_on_message_short_topic_ignored(controller):
-    controller._on_message(b"dev/actuators", b"on")
-    controller.mqtt.publish.assert_not_called()
+def test_actuator_command_refuses_unknown_target(controller):
+    controller._on_message(topic("actuators"), cmd_payload("on", target="Nope"))
+    controller.actuators["Pump"].on.assert_not_called()
+    assert controller.mqtt.publish.call_args_list[-1][0][1]["ok"] is False
 
 
-def test_on_message_unknown_actuator(controller):
-    controller._on_message(b"dev/actuators/Nope/action", b"on")
-    controller.mqtt.publish.assert_not_called()
+def test_actuator_command_refuses_missing_target(controller):
+    controller._on_message(topic("actuators"), cmd_payload("on"))
+    controller.actuators["Pump"].on.assert_not_called()
+    assert controller.mqtt.publish.call_args_list[-1][0][1]["ok"] is False
 
 
-def test_on_message_sensor_read(controller):
+# --- commandes de capteurs ---------------------------------------------------
+
+
+def test_sensor_command_publishes_reading(controller):
     controller.sensors["Soil"].read.return_value = {"moisture": {"value": 50.0}}
-    controller._on_message(b"dev/sensors/Soil/action", b"read")
+    controller._on_message(topic("sensors"), cmd_payload("read", target="Soil"))
     controller.sensors["Soil"].read.assert_called_once()
-    topic, payload = controller.mqtt.publish.call_args[0]
-    assert topic == f"{controller.client_id}/telemetry"
-    assert payload == {"Soil": {"moisture": {"value": 50.0}}}
+    telemetry = controller.mqtt.publish.call_args_list[0][0]
+    assert telemetry[0] == f"growhub/v1/{DEVICE}/telemetry"
+    assert telemetry[1] == {
+        "seq": 1,
+        "sensors": {"Soil": {"moisture": {"value": 50.0}}},
+    }
 
 
-def test_on_message_sensor_read_none_skipped(controller):
+def test_sensor_command_acks_the_reading(controller):
+    controller.sensors["Soil"].read.return_value = {"moisture": {"value": 50.0}}
+    controller._on_message(topic("sensors"), cmd_payload("read", target="Soil"))
+    ack = controller.mqtt.publish.call_args_list[-1][0][1]
+    assert ack["ok"] is True
+    assert ack["state"] == {"sensors": {"Soil": {"moisture": {"value": 50.0}}}}
+
+
+def test_sensor_command_reports_failed_read(controller):
     controller.sensors["Soil"].read.return_value = None
-    controller._on_message(b"dev/sensors/Soil/action", b"read")
+    controller._on_message(topic("sensors"), cmd_payload("read", target="Soil"))
+    assert len(controller.mqtt.publish.call_args_list) == 1
+    assert controller.mqtt.publish.call_args_list[0][0][1]["ok"] is False
+
+
+def test_sensor_command_refuses_unknown_sensor(controller):
+    controller._on_message(topic("sensors"), cmd_payload("read", target="Nope"))
+    assert controller.mqtt.publish.call_args_list[0][0][1]["ok"] is False
+
+
+# --- configuration ----------------------------------------------------------
+
+
+def test_config_command_applies_interval(controller):
+    controller._on_message(topic("config"), cmd_payload("set", telemetry_interval=60))
+    assert controller.telemetry_interval == 60
+    assert controller.mqtt.publish.call_args_list[-1][0][1]["ok"] is True
+
+
+def test_config_command_publishes_retained_config(controller):
+    controller._on_message(topic("config"), cmd_payload("set", telemetry_interval=60))
+    state_call = controller.mqtt.publish.call_args_list[0][0]
+    assert state_call[0] == f"growhub/v1/{DEVICE}/state"
+    assert state_call[1] == {"config": {"telemetry_interval": 60}}
+
+
+def test_config_command_refuses_interval_below_minimum(controller):
+    controller._on_message(topic("config"), cmd_payload("set", telemetry_interval=1))
+    assert controller.telemetry_interval == 30
+    assert controller.mqtt.publish.call_args_list[-1][0][1]["ok"] is False
+
+
+def test_config_command_refuses_unknown_key(controller):
+    controller._on_message(topic("config"), cmd_payload("set", reboot_at="midi"))
+    assert controller.mqtt.publish.call_args_list[-1][0][1]["ok"] is False
+
+
+def test_config_command_refuses_unknown_action(controller):
+    controller._on_message(topic("config"), cmd_payload("wipe"))
+    assert controller.mqtt.publish.call_args_list[-1][0][1]["ok"] is False
+
+
+# --- robustesse du routage ---------------------------------------------------
+
+
+def test_unknown_topic_ignored(controller):
+    controller._on_message(
+        b"growhub/v1/ghb-bbbbbb/cmd/actuators",
+        raw(cmd_payload("on", target="Pump")),
+    )
     controller.mqtt.publish.assert_not_called()
 
 
-# --- _read_sensor ------------------------------------------------------------
+def test_topic_of_another_device_ignored(controller):
+    controller._on_message(topic("nonsense"), raw(cmd_payload("on", target="Pump")))
+    controller.mqtt.publish.assert_not_called()
 
 
-def test_read_sensor_first_try(controller):
-    sensor = controller.sensors["Soil"]
-    sensor.read.return_value = {"moisture": {"value": 1}}
-    result = asyncio.run(controller._read_sensor(sensor))
-    assert result == {"moisture": {"value": 1}}
-    assert sensor.read.call_count == 1
+def test_malformed_payload_does_not_raise(controller):
+    controller._on_message(topic("actuators"), b"{pas du json")
+    controller.actuators["Pump"].on.assert_not_called()
 
 
-def test_read_sensor_retries_on_none(controller):
-    sensor = controller.sensors["Climate"]
-    sensor.read.side_effect = [None, None, {"temperature": {"value": 20}}]
-    with patch("asyncio.sleep", _instant_sleep):
-        result = asyncio.run(controller._read_sensor(sensor))
-    assert result == {"temperature": {"value": 20}}
-    assert sensor.read.call_count == 3
+# --- appairage ---------------------------------------------------------------
 
 
-def test_read_sensor_exhausts_retries(controller):
-    sensor = controller.sensors["Climate"]
-    sensor.read.return_value = None
-    with patch("asyncio.sleep", _instant_sleep):
-        result = asyncio.run(controller._read_sensor(sensor, retries=2))
-    assert result is None
-    assert sensor.read.call_count == 2
+def test_credentials_message_is_saved_and_device_restarts(unpaired):
+    _machine.reset.reset_mock()
+    payload = {
+        "username": DEVICE,
+        "password": "device-pw",
+        "broker": "broker",
+        "port": 1883,
+    }
+    unpaired._on_message(f"growhub/v1/provision/{DEVICE}/creds".encode(), raw(payload))
+    _machine.reset.assert_called_once()
 
 
-def test_read_sensor_recovers_from_exception(controller):
-    sensor = controller.sensors["Soil"]
-    sensor.read.side_effect = [OSError("fail"), {"moisture": {"value": 5}}]
-    with patch("asyncio.sleep", _instant_sleep):
-        result = asyncio.run(controller._read_sensor(sensor))
-    assert result == {"moisture": {"value": 5}}
-    assert sensor.read.call_count == 2
+def test_credentials_message_writes_the_file(tmp_path):
+    path = Path(_creds_path(tmp_path))
+    c = GrowHubController(MANIFEST, SECRETS, credentials_path=str(path))
+    payload = {
+        "username": DEVICE,
+        "password": "device-pw",
+        "broker": "broker",
+        "port": 1883,
+    }
+    c._on_message(f"growhub/v1/provision/{DEVICE}/creds", raw(payload))
+    assert _json.loads(path.read_text())["username"] == DEVICE
+    assert _json.loads(path.read_text())["password"] == "device-pw"
 
 
-# --- loop tasks --------------------------------------------------------------
+def test_credentials_message_ignored_once_paired(controller):
+    controller._on_message(
+        f"growhub/v1/provision/{DEVICE}/creds",
+        raw({"username": "ghb-x", "password": "y"}),
+    )
+    # Un boîtier appairé ne se réappaire pas tout seul sur ce topic.
+    controller.mqtt.publish.assert_not_called()
 
 
-def test_telemetry_task_publishes(controller):
+def test_incomplete_credentials_are_ignored(unpaired):
+    _machine.reset.reset_mock()
+    unpaired._on_message(
+        f"growhub/v1/provision/{DEVICE}/creds", raw({"username": DEVICE})
+    )
+    _machine.reset.assert_not_called()
+
+
+# --- boucles -----------------------------------------------------------------
+
+
+def test_telemetry_task_publishes_sequence(controller):
     controller.wifi.wlan.isconnected.return_value = True
     controller.mqtt.is_connected.return_value = True
     controller.sensors["Soil"].read.return_value = {"moisture": {"value": 42.0}}
@@ -293,11 +464,48 @@ def test_telemetry_task_publishes(controller):
             asyncio.run(controller._telemetry_task())
 
     controller.mqtt.publish.assert_called_once()
-    topic, data = controller.mqtt.publish.call_args[0]
-    assert topic == f"{controller.client_id}/telemetry"
-    assert data["Soil"] == {"moisture": {"value": 42.0}}
-    assert data["Climate"] == {"temperature": {"value": 20}}
-    assert data["actuators"] == {"Pump": "ON"}
+    published_topic, data = controller.mqtt.publish.call_args[0]
+    assert published_topic == f"growhub/v1/{DEVICE}/telemetry"
+    assert data["seq"] == 1
+    assert data["sensors"]["Soil"] == {"moisture": {"value": 42.0}}
+    assert data["sensors"]["Climate"] == {"temperature": {"value": 20}}
+    assert data["actuators"] == {"Pump": "OFF"}
+    assert "ts" not in data
+
+
+def test_telemetry_task_skips_failed_sensor(controller):
+    controller.wifi.wlan.isconnected.return_value = True
+    controller.mqtt.is_connected.return_value = True
+    controller.sensors["Soil"].read.return_value = None
+    controller.sensors["Climate"].read.return_value = {"temperature": {"value": 20}}
+
+    async def break_on_interval(delay):
+        # Distingue le sommeil d'intervalle des attentes de réessai (2 s).
+        if delay == controller.telemetry_interval:
+            raise _LoopBreak()
+
+    with patch("asyncio.sleep", break_on_interval):
+        with pytest.raises(_LoopBreak):
+            asyncio.run(controller._telemetry_task())
+
+    data = controller.mqtt.publish.call_args[0][1]
+    assert data["sensors"] == {"Climate": {"temperature": {"value": 20}}}
+
+
+def test_telemetry_task_uses_the_configured_interval(controller):
+    controller.wifi.wlan.isconnected.return_value = True
+    controller.mqtt.is_connected.return_value = True
+    controller.telemetry_interval = 120
+    sleeps = []
+
+    async def record_sleep(delay):
+        sleeps.append(delay)
+        raise _LoopBreak()
+
+    with patch("asyncio.sleep", record_sleep):
+        with pytest.raises(_LoopBreak):
+            asyncio.run(controller._telemetry_task())
+    assert sleeps == [120]
 
 
 def test_telemetry_task_skips_when_disconnected(controller):
@@ -336,61 +544,131 @@ def test_button_task_ignores_unpressed(controller):
     controller.mqtt.publish.assert_not_called()
 
 
-def test_mqtt_keepalive_reconnects(controller):
+def test_mqtt_keepalive_reconnects_and_announces(controller):
     controller.wifi.wlan.isconnected.return_value = True
     controller.mqtt.is_connected.return_value = False
-    controller.mqtt.connect = AsyncMock()
+    controller.mqtt.connect = AsyncMock(return_value=True)
     with patch("asyncio.sleep", _break_sleep):
         with pytest.raises(_LoopBreak):
             asyncio.run(controller._mqtt_keepalive())
     controller.mqtt.connect.assert_called_once()
 
 
-# --- display integration -----------------------------------------------------
+def test_announce_publishes_info_and_state(controller):
+    controller._announce()
+    published = [call[0][0] for call in controller.mqtt.publish.call_args_list]
+    assert f"growhub/v1/{DEVICE}/info" in published
+    assert f"growhub/v1/{DEVICE}/state" in published
+    info_call = [
+        call
+        for call in controller.mqtt.publish.call_args_list
+        if call[0][0] == f"growhub/v1/{DEVICE}/info"
+    ][0]
+    payload = info_call[0][1]
+    assert payload["hw_id"] == DEVICE
+    assert payload["sensors"] == [{"name": "Soil"}, {"name": "Climate"}]
+    assert payload["actuators"] == [{"name": "Pump"}]
+    assert payload["fw"] == "2.0.0"
+    assert payload["model"] == "Bourgeon V1"
 
 
-def test_setup_display_when_configured():
+def test_unpaired_device_announces_itself_for_pairing(unpaired):
+    unpaired._announce()
+    published = [call[0][0] for call in unpaired.mqtt.publish.call_args_list]
+    assert f"growhub/v1/provision/{DEVICE}" in published
+
+
+def test_paired_device_does_not_announce_pairing(controller):
+    controller._announce()
+    published = [call[0][0] for call in controller.mqtt.publish.call_args_list]
+    assert f"growhub/v1/provision/{DEVICE}" not in published
+
+
+# --- affichage ---------------------------------------------------------------
+
+
+def test_setup_display_when_configured(tmp_path):
     _display.Display.reset_mock()
     display_cfg = {"type": "ssd1306", "width": 128, "height": 64}
-    c = GrowHubController(dict(MANIFEST, display=display_cfg), SECRETS)
+    c = GrowHubController(
+        dict(MANIFEST, display=display_cfg),
+        SECRETS,
+        credentials_path=_creds_path(tmp_path),
+    )
     assert c.display is _display.Display.return_value
     _display.Display.assert_called_once_with(display_cfg)
 
 
-def test_setup_display_absent():
-    c = GrowHubController(MANIFEST, SECRETS)
-    assert c.display is None
+def test_setup_display_absent(controller):
+    assert controller.display is None
 
 
-def test_display_task_returns_when_no_display():
-    c = GrowHubController(MANIFEST, SECRETS)
-    asyncio.run(c._display_task())
+def test_display_task_returns_when_no_display(controller):
+    asyncio.run(controller._display_task())
 
 
-def test_display_task_renders_temperature():
-    c = GrowHubController(MANIFEST, SECRETS)
-    c.display = MagicMock()
-    c.sensors["Climate"].read.return_value = {
+def test_display_task_shows_pairing_code(unpaired):
+    unpaired.display = MagicMock()
+    with patch("asyncio.sleep", _break_sleep):
+        with pytest.raises(_LoopBreak):
+            asyncio.run(unpaired._display_task())
+    unpaired.display.text.assert_any_call("BOURGEON", 0, 0)
+    unpaired.display.text.assert_any_call("Code : ABC234", 0, 20)
+    unpaired.display.text.assert_any_call(DEVICE, 0, 40)
+    unpaired.display.show.assert_called_once()
+
+
+def test_display_task_renders_temperature(controller):
+    controller.display = MagicMock()
+    controller.sensors["Climate"].read.return_value = {
         "temperature": {"value": 21.5},
         "humidity": {"value": 55},
     }
     with patch("asyncio.sleep", _break_sleep):
         with pytest.raises(_LoopBreak):
-            asyncio.run(c._display_task())
+            asyncio.run(controller._display_task())
 
-    c.display.clear.assert_called_once()
-    c.display.text.assert_any_call("GROWHUB", 0, 0)
-    c.display.text.assert_any_call("Temp: 21.5 C", 0, 25)
-    c.display.text.assert_any_call("Hum: 55%", 0, 45)
-    c.display.show.assert_called_once()
+    controller.display.clear.assert_called_once()
+    controller.display.text.assert_any_call("BOURGEON", 0, 0)
+    controller.display.text.assert_any_call("Temp: 21.5 C", 0, 25)
+    controller.display.text.assert_any_call("Hum: 55%", 0, 45)
+    controller.display.show.assert_called_once()
 
 
-def test_display_task_shows_error_when_no_temperature():
-    c = GrowHubController(MANIFEST, SECRETS)
-    c.display = MagicMock()
-    for sensor in c.sensors.values():
+def test_display_task_shows_error_when_no_temperature(controller):
+    controller.display = MagicMock()
+    for sensor in controller.sensors.values():
         sensor.read.return_value = {"moisture": {"value": 40}}
     with patch("asyncio.sleep", _break_sleep):
         with pytest.raises(_LoopBreak):
-            asyncio.run(c._display_task())
-    c.display.text.assert_any_call("Erreur Capteur", 0, 25)
+            asyncio.run(controller._display_task())
+    controller.display.text.assert_any_call("Erreur Capteur", 0, 25)
+
+
+# --- lectures capteurs -------------------------------------------------------
+
+
+def test_read_sensor_first_try(controller):
+    sensor = controller.sensors["Soil"]
+    sensor.read.return_value = {"moisture": {"value": 1}}
+    result = asyncio.run(controller._read_sensor(sensor))
+    assert result == {"moisture": {"value": 1}}
+    assert sensor.read.call_count == 1
+
+
+def test_read_sensor_retries_on_none(controller):
+    sensor = controller.sensors["Climate"]
+    sensor.read.side_effect = [None, None, {"temperature": {"value": 20}}]
+    with patch("asyncio.sleep", _instant_sleep):
+        result = asyncio.run(controller._read_sensor(sensor))
+    assert result == {"temperature": {"value": 20}}
+    assert sensor.read.call_count == 3
+
+
+def test_read_sensor_recovers_from_exception(controller):
+    sensor = controller.sensors["Soil"]
+    sensor.read.side_effect = [OSError("fail"), {"moisture": {"value": 5}}]
+    with patch("asyncio.sleep", _instant_sleep):
+        result = asyncio.run(controller._read_sensor(sensor))
+    assert result == {"moisture": {"value": 5}}
+    assert sensor.read.call_count == 2

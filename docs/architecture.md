@@ -125,3 +125,32 @@ change de `GrowHubClient-xxxx` à `ghb-xxxxxx`.
 
 Test d'intégration de bout en bout (jalon M8) : un Bourgeon simulé (script Python publiant
 sur le broker) → télémétrie visible en base et dans le flux SSE.
+
+Le contrat du fil est verrouillé par `gateway/backend/telemetry/tests/test_contract.py`, qui
+charge le `firmware/src/topics.py` réel et le confronte aux topics du serveur et aux règles
+d'ACL générées : une dérive d'un seul côté casse la suite de tests au lieu de casser un
+boîtier dans une serre. Y compris la vérification qu'un appareil ne peut atteindre que son
+propre préfixe, jokers MQTT (`+`, `#`) évalués comme le fait le broker.
+
+## 9. Firmware du Bourgeon
+
+Deux modes, choisis au démarrage par la présence du fichier `creds.json` :
+
+| | identifiants broker | rôle |
+| :--- | :--- | :--- |
+| **Appairage** (pas de `creds.json`) | compte d'amorçage du `secrets.py` | s'annonce sur `provision/<device_id>`, écoute `.../creds`, affiche le code à l'écran |
+| **Normal** | identifiants définitifs écrits par l'appairage | télémétrie, commandes, état |
+
+Points de conception :
+
+- L'identifiant du boîtier vient du matériel (`machine.unique_id()`), jamais d'un fichier
+  éditable : un appareil ne peut pas se faire passer pour un autre en changeant un réglage.
+- `firmware/src/topics.py` est le miroir du contrat serveur ; aucun topic n'est écrit à la
+  main ailleurs dans le firmware.
+- Les commandes refusées (actionneur inconnu, action non autorisée, clé de configuration
+  inconnue, intervalle sous le minimum) répondent `ok:false` avec un motif, au lieu d'échouer
+  en silence : le serveur sait toujours pourquoi une commande n'a pas abouti.
+- La configuration se borne côté firmware (intervalle de télémétrie ≥ 5 s) : une commande
+  erronée du serveur ne peut pas vider la batterie ni saturer le broker.
+- Le boîtier n'embarque aucune notion d'utilisateur ni de droit : toute la propriété vit en
+  base, ce qui permet de céder un appareil sans le reflasher.

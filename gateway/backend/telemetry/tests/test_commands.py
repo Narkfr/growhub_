@@ -54,13 +54,10 @@ def test_unknown_kind_is_refused(device, user, dispatcher):
         dispatcher.send(device, user, "lasers", "ON")
 
 
-def test_broker_failure_is_audited(device, user, publisher):
-    from conftest import FakePublisher
+def test_broker_failure_is_audited(device, user, failing_publisher):
     from telemetry.services import CommandDispatcher
 
-    failing = CommandDispatcher(
-        publisher=FakePublisher(fail_with=OSError("broker injoignable"))
-    )
+    failing = CommandDispatcher(publisher=failing_publisher)
     with pytest.raises(CommandDispatchError):
         failing.send(device, user, "actuators", "ON")
 
