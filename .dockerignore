@@ -1,0 +1,16 @@
+# Build context for gateway images (context = repo root)
+.git
+venv
+.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/.next
+**/.pytest_cache
+**/.ruff_cache
+**/*.egg-info
+gateway/.env
+gateway/mosquitto/data
+gateway/mosquitto/log
+firmware/secrets.py
+firmware/manifest.py

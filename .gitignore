@@ -16,4 +16,17 @@ gateway/influxdb/data
 # Secrets
 gateway/.env
 firmware/secrets.py
+firmware/manifest.py
 gateway/mosquitto/config/password_file
+
+# Python build artifacts
+*.egg-info/
+venv/
+
+# MicroPython project markers (local tooling state)
+.micropico
+firmware/.micropico
+
+# MQTT runtime data/logs (never commit broker state)
+gateway/mosquitto/data/
+gateway/mosquitto/log/

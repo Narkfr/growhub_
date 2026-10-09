@@ -1,6 +1,6 @@
-# 🌿 Smart Greenhouse - Radish MVP
+# 🌿 GrowHub — Smart Greenhouse
 
-An automated monitoring and control system for high-speed radish cultivation (18-day varieties). This project leverages a modern IoT architecture with a distributed Edge-to-Gateway approach, focused on reliability and data persistence.
+An automated monitoring and control system for indoor cultivation. This project leverages a modern IoT architecture with a distributed Edge-to-Gateway approach, focused on reliability and data persistence.
 
 ---
 
@@ -11,30 +11,44 @@ An automated monitoring and control system for high-speed radish cultivation (18
 | **Edge Device** | Raspberry Pi Pico W | Sensor data collection (MicroPython) and actuator control. |
 | **Connectivity** | MQTT over Wi-Fi | Lightweight pub/sub protocol for JSON data transport. |
 | **Gateway Hub** | Raspberry Pi 4 (Docker) | MQTT Broker (Mosquitto), Time-series DB (InfluxDB), and Logic Bridge. |
-| **Interface** | Next.js / Tailwind | Real-time dashboard and historical growth analytics. |
+| **Interface** | Next.js / Tailwind + Flask | Real-time dashboard (live telemetry + actuator states) over REST/SSE. |
 
 ---
 
 ## 📂 Project Structure (Clean Monorepo)
 
 ```text
-smart-serre-radis/
-├── firmware/         # Embedded MicroPython source code
-│   ├── src/          # Core logic and drivers (sensors.py, etc.)
-│   ├── lib/          # External MicroPython libraries
-│   ├── boot.py       # Network initialization at startup
-│   ├── main.py       # Main orchestrator (infinite loop)
-│   └── config_culture.py # Agronomic parameters
-├── gateway/          # Server-side infrastructure (RPi 4)
-│   ├── mosquitto/    # MQTT Broker configuration
+growhub/
+├── firmware/              # Embedded MicroPython source
+│   ├── src/               # Core logic: sensors/, actuators/, managers
+│   ├── lib/               # Bundled MicroPython libraries (umqtt)
+│   ├── main.py            # Entry point (asyncio loop)
+│   ├── manifest.py        # Hardware + calibration configuration
+│   ├── constants.py       # Allowed actions / shared constants
+│   ├── boot.py            # Runs at power-on (currently empty)
+│   └── secrets.example.py # Credentials template (copy to secrets.py)
+├── gateway/               # Server-side infrastructure (RPi 4)
+│   ├── api/               # Flask real-time API (REST + SSE over MQTT)
+│   ├── frontend/          # Next.js + Tailwind live dashboard
+│   ├── mosquitto/         # MQTT Broker configuration + runtime data
+│   ├── itk/               # Technical itinerary (ITK) JSON definitions
+│   ├── logic_engine.py    # Automation / decision engine
+│   ├── telemetry_logger.py# MQTT -> InfluxDB bridge
+│   ├── sync_itk.py        # ITK JSON -> PostgreSQL sync
+│   ├── init_db.py         # PostgreSQL schema initialization
 │   └── docker-compose.yml # Docker service orchestration
-├── dashboard/        # Web Application (Next.js)
-├── tests/            # Centralized Quality Control
-│   ├── firmware/     # Unit tests and mocks for Pico W logic
-│   └── gateway/      # Integration tests (MQTT, Database)
-├── docs/             # Wiring diagrams and build documentation
-└── .gitignore        # Local and sensitive file exclusions
+├── tools/                 # Dev + hardware helpers
+├── tests/                 # Unit tests (sensors + actuators, mocked HW)
+├── docs/                  # Setup and build documentation
+└── .gitignore             # Local and sensitive file exclusions
 ```
+
+---
+
+## 📚 Documentation
+
+- [Tooling reference](docs/tooling.md) — the full list of tools used in the project and what each one is for.
+- [Gateway setup guide](docs/gateway_setup.md) — how to deploy the Dockerized gateway stack.
 
 ---
 
@@ -83,3 +97,39 @@ smart-serre-radis/
 2. Open the `/firmware` folder in VS Code and initialize the MicroPico project.
 3. Update VS Code settings: `micropico.sync.auto: true`.
 4. Run `docker-compose up -d` on the Raspberry Pi 4 to boot the infrastructure.
+5. Boot the whole stack with `docker compose up -d --build` in `gateway/` — see
+   the [Gateway setup guide](docs/gateway_setup.md).
+
+---
+
+## 🗺️ Roadmap / Known limitations
+
+### Next steps (planned)
+
+- **Multi-device support** — let several Picos publish to the same gateway.
+  The API already keys state by MQTT client id, but the dashboard, the
+  logic engine and the docs assume a single device. Give each device its
+  own MQTT account (see `docs/gateway_setup.md` §8), list every device in
+  the frontend, and make `logic_engine.py` per-device.
+- **Actuator control** — drive actuators two ways:
+  1. manually, from the dashboard (ON/OFF commands: frontend → API → MQTT →
+     firmware);
+  2. automatically, from the ITK rules (e.g. water pump from soil moisture,
+     grow lamp from the light schedule) — finish `gateway/logic_engine.py`
+     and wire the actuator command path end-to-end.
+- **ITK management in the frontend** — view and edit the technical itinerary
+  (phases, thresholds, schedules) from the dashboard, backed by PostgreSQL
+  (`init_db.py` / `sync_itk.py`), instead of editing `gateway/itk/*.json`
+  by hand.
+- **Firmware rework** — clean up the Pico firmware (details to be agreed).
+
+### Known limitations
+
+- **Temperature control**: `temp_min` / `temp_max` are defined in the ITK
+  (`gateway/itk/*.json`) but not yet acted upon — there is no ventilation or
+  heating actuator wired yet. Temperature is recorded as telemetry only.
+- **Dashboard**: the live telemetry dashboard (`gateway/api` + `gateway/frontend`)
+  is implemented and shows real-time sensor readings and actuator states.
+  Historical charts over InfluxDB are not wired yet.
+- **TLS**: MQTT runs plaintext on the local network; TLS is deferred (see
+  `docs/gateway_setup.md`).

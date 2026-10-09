@@ -49,5 +49,5 @@ class TestClimateSensor:
     def test_read_data_timeout(self, sensor):
         mock_dht.DHT11.return_value.measure.side_effect = OSError(110)
 
-        result = sensor.read(retries=2)
+        result = sensor.read()
         assert result is None

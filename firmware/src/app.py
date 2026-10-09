@@ -1,6 +1,12 @@
 import asyncio
 
-from constants import ALLOWED_ACTUATOR_ACTIONS, ALLOWED_SENSOR_ACTIONS
+import machine
+import ubinascii
+from constants import (
+    ALLOWED_ACTUATOR_ACTIONS,
+    ALLOWED_SENSOR_ACTIONS,
+    TELEMETRY_INTERVAL_SECONDS,
+)
 from src.actuators.base import BaseActuator, ManualButton
 from src.mqtt_manager import MqttManager
 from src.network_manager import NetworkManager
@@ -12,15 +18,21 @@ class GrowHubController:
         self.manifest = manifest
         self.secrets = secrets
 
+        # Unique client id per device (prevents MQTT id collisions when
+        # several GrowHubs share a broker).
+        unique = ubinascii.hexlify(machine.unique_id()).decode()
+        self.client_id = f"{manifest['client_id']}-{unique}"
+
         # Managers
         self.wifi = NetworkManager(
             secrets.get("WIFI_SSID"), secrets.get("WIFI_PASSWORD")
         )
         self.mqtt = MqttManager(
-            client_id=manifest["client_id"],
+            client_id=self.client_id,
             broker_ip=secrets.get("MQTT_BROKER"),
             user=secrets.get("MQTT_USER"),
             password=secrets.get("MQTT_PASSWORD"),
+            port=secrets.get("MQTT_PORT", 1883),
         )
 
         # Hardware storage
@@ -31,10 +43,16 @@ class GrowHubController:
         self._setup_hardware()
         self.mqtt.set_callback(self._on_message)
 
+        # Display (optional, configured in the manifest)
+        self.display = None
+        self._setup_display()
+
     def _setup_hardware(self):
         # Setup Actuators
         for item in self.manifest["actuators"]:
-            self.actuators[item["id"]] = BaseActuator(item["pin"], item["id"])
+            self.actuators[item["id"]] = BaseActuator(
+                item["pin"], item["id"], item.get("active_low", True)
+            )
 
         # Setup Sensors
         for item in self.manifest["sensors"]:
@@ -50,6 +68,13 @@ class GrowHubController:
         for item in self.manifest["buttons"]:
             btn = ManualButton(item["pin"], item["id"], item["target"])
             self.buttons.append(btn)
+
+    def _setup_display(self):
+        if "display" not in self.manifest:
+            return
+        from src.display import Display
+
+        self.display = Display(self.manifest["display"])
 
     def _on_message(self, topic, msg):
         """Routing logic using getattr for cleaner execution."""
@@ -70,36 +95,52 @@ class GrowHubController:
                     getattr(target, action)()
                     # Send feedback
                     self.mqtt.publish(
-                        f"{self.manifest['client_id']}/data/{target_id}/state",
-                        {
-                            "actuator": target_id,
-                            "data": {"state": target.human_state()},
-                        },
+                        f"{self.client_id}/data/{target_id}/state",
+                        {"state": target.human_state()},
+                        retain=True,
                     )
             elif category == "sensors" and action in ALLOWED_SENSOR_ACTIONS:
                 target = self.sensors.get(target_id)
                 if target:
-                    self.mqtt.publish(
-                        f"{self.manifest['client_id']}/data",
-                        {"sensor": target_id, "data": target.read()},
-                    )
+                    result = target.read()
+                    if result is not None:
+                        # Reuse the telemetry topic/shape so the gateway
+                        # logger picks up this on-demand reading.
+                        self.mqtt.publish(
+                            f"{self.client_id}/telemetry", {target_id: result}
+                        )
         except Exception as e:
             print(f"Callback error: {e}")
 
+    async def _read_sensor(self, sensor, retries=3):
+        """Read a sensor, retrying asynchronously on None (e.g. DHT timeouts)."""
+        for _ in range(retries):
+            try:
+                value = sensor.read()
+            except Exception as e:
+                print(f"Sensor read error: {e}")
+                value = None
+            if value is not None:
+                return value
+            await asyncio.sleep(2)
+        return None
+
     async def _telemetry_task(self):
         while True:
-            if self.wifi.wlan.isconnected():
-                data = {sid: s.read() for sid, s in self.sensors.items()}
+            if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
+                data = {}
+                for sid, s in self.sensors.items():
+                    data[sid] = await self._read_sensor(s)
                 data["actuators"] = {
                     aid: "ON" if act.is_on() else "OFF"
                     for aid, act in self.actuators.items()
                 }
-                self.mqtt.publish(f"{self.manifest['client_id']}/telemetry", data)
-            await asyncio.sleep(1)
+                self.mqtt.publish(f"{self.client_id}/telemetry", data)
+            await asyncio.sleep(TELEMETRY_INTERVAL_SECONDS)
 
     async def _listen_task(self):
         while True:
-            if self.wifi.wlan.isconnected():
+            if self.wifi.wlan.isconnected() and self.mqtt.is_connected():
                 self.mqtt.check_msg()
             await asyncio.sleep(0.1)
 
@@ -115,11 +156,9 @@ class GrowHubController:
 
                         # 2. Feedback MQTT immédiat (pour synchroniser le Dashboard)
                         self.mqtt.publish(
-                            f"{self.manifest['client_id']}/data",
-                            {
-                                "actuator": btn.target_id,
-                                "data": {"state": target.human_state()},
-                            },
+                            f"{self.client_id}/data/{btn.target_id}/state",
+                            {"state": target.human_state()},
+                            retain=True,
                         )
 
                         # Debounce: wait until button is released or small delay
@@ -128,14 +167,54 @@ class GrowHubController:
             # Very short sleep to let other tasks run
             await asyncio.sleep(0.05)
 
-    async def run(self):
-        """Entry point for the async loop."""
-        if await self.wifi.connect():
-            await self.mqtt.connect()
+    async def _mqtt_keepalive(self):
+        """Reconnect MQTT whenever the link drops (once Wi-Fi is back)."""
+        while True:
+            if self.wifi.wlan.isconnected() and not self.mqtt.is_connected():
+                await self.mqtt.connect()
+            await asyncio.sleep(10)
 
+    async def _display_task(self):
+        """Render live telemetry on the OLED display (if configured)."""
+        if self.display is None:
+            return
+        while True:
+            try:
+                temp = None
+                hum = None
+                for sensor in self.sensors.values():
+                    data = await self._read_sensor(sensor, retries=1)
+                    if not data:
+                        continue
+                    if "temperature" in data:
+                        temp = data["temperature"]["value"]
+                        hum = data.get("humidity", {}).get("value")
+
+                self.display.clear()
+                self.display.text("GROWHUB", 0, 0)
+                if temp is not None and hum is not None:
+                    self.display.text(f"Temp: {temp} C", 0, 25)
+                    self.display.text(f"Hum: {hum}%", 0, 45)
+                else:
+                    self.display.text("Erreur Capteur", 0, 25)
+                self.display.show()
+            except Exception as e:
+                print(f"Display error: {e}")
+            await asyncio.sleep(2)
+
+    async def run(self):
+        """Entry point for the async loop.
+
+        All background tasks start immediately so the display and buttons
+        keep working even when Wi-Fi or MQTT are unavailable. Connectivity
+        is established by keep_connected() and _mqtt_keepalive() running
+        in the background.
+        """
         await asyncio.gather(
             self._telemetry_task(),
             self._listen_task(),
             self._button_task(),
+            self._display_task(),
             self.wifi.keep_connected(),
+            self._mqtt_keepalive(),
         )

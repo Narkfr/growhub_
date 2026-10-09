@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from datetime import datetime
 
 import paho.mqtt.client as mqtt
@@ -20,8 +21,18 @@ DB_PARAMS = {
 }
 
 
+# Per-thread connection cache: paho callbacks and the APScheduler job run in
+# different threads, so a single shared connection would not be safe.
+_local = threading.local()
+
+
 def get_db_connection():
-    return psycopg2.connect(**DB_PARAMS)
+    """Return a per-thread cached connection, reconnecting if closed."""
+    conn = getattr(_local, "conn", None)
+    if conn is None or conn.closed:
+        conn = psycopg2.connect(**DB_PARAMS)
+        _local.conn = conn
+    return conn
 
 
 def send_command(client_id, actuator, action):
@@ -47,11 +58,15 @@ def get_active_device_config(device_id):
     """
     cur.execute(query, (device_id,))
     row = cur.fetchone()
-    conn.close()
+    cur.close()
     return row  # Returns (settings_dict, mode_string)
 
 
 # --- LOGIC COMPONENTS ---
+#
+# NOTE: the ITK also defines temp_min/temp_max, but there is no ventilation
+# or heating actuator wired yet, so temperature is recorded (telemetry) but
+# not acted upon. See the roadmap in README.md.
 
 
 def handle_lighting(device_id, settings):
@@ -61,7 +76,7 @@ def handle_lighting(device_id, settings):
     print(f"[{device_id}] Light Check: Start {start_h}h for {duration}h")
 
     if duration == 0:
-        send_command(device_id, "GrowLamp", "off")
+        set_actuator(device_id, "GrowLamp", "off")
         return
 
     now_h = datetime.now().hour
@@ -75,16 +90,53 @@ def handle_lighting(device_id, settings):
         should_be_on = now_h >= start_h or now_h < end_h
 
     action = "on" if should_be_on else "off"
-    send_command(device_id, "GrowLamp", action)
+    set_actuator(device_id, "GrowLamp", action)
+
+
+# Moisture hysteresis band (%): pump turns ON strictly below the target and
+# OFF only once moisture rises this far above it, preventing rapid flapping.
+MOISTURE_HYSTERESIS = 5
+# Minimum actuator run time (seconds) before it may be switched back off.
+MIN_RUN_SECONDS = 30
+
+_actuator_state = {}  # (device_id, actuator) -> "on" | "off"
+_actuator_changed_at = {}  # (device_id, actuator) -> datetime
+
+
+def set_actuator(device_id, actuator, desired):
+    """Send a command only when it actually changes the actuator state.
+
+    Avoids re-sending the same command every tick and enforces a minimum
+    runtime before an actuator can be switched back off.
+    """
+    key = (device_id, actuator)
+    current = _actuator_state.get(key, "off")
+    if desired is None or desired == current:
+        return
+
+    now = datetime.now()
+    if current == "on" and desired == "off":
+        started = _actuator_changed_at.get(key, now)
+        if (now - started).total_seconds() < MIN_RUN_SECONDS:
+            return
+
+    send_command(device_id, actuator, desired)
+    _actuator_state[key] = desired
+    _actuator_changed_at[key] = now
 
 
 def handle_moisture(device_id, settings, current_moisture):
     """Triggers watering if moisture drops below the ITK phase target."""
     target = settings.get("moisture_target", 50)
+
     if current_moisture < target:
-        send_command(device_id, "WaterPump", "on")
+        desired = "on"
+    elif current_moisture > target + MOISTURE_HYSTERESIS:
+        desired = "off"
     else:
-        send_command(device_id, "WaterPump", "off")
+        desired = None  # inside the hysteresis band: keep current state
+
+    set_actuator(device_id, "WaterPump", desired)
 
 
 # --- PERIODIC TASKS ---
@@ -96,7 +148,7 @@ def run_scheduled_logic():
     cur = conn.cursor()
     cur.execute("SELECT id FROM devices WHERE mode = 'AUTO'")
     devices = cur.fetchall()
-    conn.close()
+    cur.close()
 
     for (device_id,) in devices:
         config = get_active_device_config(device_id)
@@ -159,7 +211,7 @@ mqtt_client.on_message = on_message
 
 # Scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(run_scheduled_logic, "interval", seconds=5)
+scheduler.add_job(run_scheduled_logic, "interval", seconds=60)
 scheduler.start()
 
 print(f"Attempting to connect to {os.getenv('MQTT_BROKER')}...")

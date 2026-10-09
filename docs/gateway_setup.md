@@ -44,7 +44,7 @@ MQTT_PORT=1883
 
 # PostgreSQL (Planning & ITK)
 POSTGRES_HOST=localhost
-POSTGRES_PORT=5433
+POSTGRES_PORT=5432
 POSTGRES_USER=your_user
 POSTGRES_PASSWORD=your_password
 POSTGRES_DB=growhub
@@ -61,7 +61,7 @@ Create `mosquitto/config/mosquitto.conf`:
 ```ini
 listener 1883 0.0.0.0
 allow_anonymous false
-password_file /mosquitto/config/pwfile
+password_file /mosquitto/config/password_file
 persistence true
 persistence_location /mosquitto/data/
 log_dest file /mosquitto/log/mosquitto.log
@@ -121,10 +121,188 @@ python3 logic_engine.py
 | :--- | :--- | :--- | :--- |
 | Mosquitto | 1883 | 1883 | MQTT Broker |
 | InfluxDB | 8086 | 8086 | Time Series Database |
-| PostgreSQL | 5432 | 5433 | Relational Database |
+| PostgreSQL | 5432 | 5432 | Relational Database |
 | Adminer | 8080 | 8080 | SQL Management UI |
-| Grafana | 3000 | 3000 | Visualization Dashboards |
+| Flask API | 5001 | 5001 | Real-time REST/SSE API |
+| Next.js dashboard | 3001 | 3001 | Live telemetry dashboard |
+| Grafana *(planned)* | 3002 | 3002 | Visualization Dashboards |
 
 ## 7. Useful MQTT Commands
 - **Subscribe to Telemetry**: `mosquitto_sub -h localhost -t "+/telemetry" -u $USER -P $PASSWORD`
 - **Manual Actuator Command**: `mosquitto_pub -h localhost -t "DeviceID/actuators/ActuatorID/action" -m "ON" -u $USER -P $PASSWORD`
+
+## 8. Security
+
+### Per-device credentials
+Each GrowHub device must authenticate with its OWN MQTT account — never
+share one account across devices, so a compromised device can be revoked
+individually.
+
+```bash
+source .env
+docker exec -it growhub-mqtt mosquitto_passwd -b /mosquitto/config/password_file growhub_device1 <password1>
+docker exec -it growhub-mqtt mosquitto_passwd -b /mosquitto/config/password_file growhub_device2 <password2>
+docker compose restart
+```
+
+Then set `MQTT_USER` / `MQTT_PASSWORD` in each device's `firmware/secrets.py`
+to that device's own credentials.
+
+### TLS (deferred)
+The broker currently runs plain MQTT on port 1883, which is acceptable on a
+trusted local network. If the gateway is ever exposed beyond the LAN, enable
+TLS (port 8883) with per-device certificates. This is intentionally deferred
+for the MVP — see the project roadmap.
+
+## 9. Real-time Dashboard (API + Frontend)
+
+The live dashboard is two pieces, both living under `gateway/`:
+
+- **`gateway/api/`** — a Flask app that subscribes to the broker and keeps the
+  latest state of every device in memory, then serves it over REST and
+  Server-Sent Events (SSE).
+- **`gateway/frontend/`** — a Next.js + Tailwind single-page app that renders
+  the state and updates in real time.
+
+The browser only talks to the Next.js origin; `next.config.mjs` proxies
+`/api/*` to the Flask app (default `http://127.0.0.1:5001`, overridable with
+`GROWHUB_API_URL`).
+
+### 9.1 API
+
+Endpoints:
+
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| GET | `/api/health` | Liveness check + number of known devices. |
+| GET | `/api/state` | Latest state of every device (JSON). |
+| GET | `/api/stream` | SSE stream: full snapshot, then updates on each MQTT message. |
+
+Configuration (from `gateway/.env` or environment):
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `GROWHUB_API_HOST` | `0.0.0.0` | Bind address of the Flask server. |
+| `GROWHUB_API_PORT` | `5001` | HTTP port of the Flask server. |
+| `MQTT_BROKER` | `localhost` | Broker host. |
+| `MQTT_PORT` | `1883` | Broker port. |
+| `MQTT_USER` / `MQTT_PASSWORD` | — | Credentials the API uses to subscribe. |
+
+Run it manually (from the repo root, in a venv with `flask`, `paho-mqtt`,
+`python-dotenv`):
+
+```bash
+python -m gateway.api
+```
+
+### 9.2 Frontend
+
+```bash
+cd gateway/frontend
+npm install
+npm run build     # production build
+npm start         # serve on port 3001
+```
+
+Tests: `npm test` (vitest). The API's Python tests run with the rest of the
+suite (`python -m pytest -q`).
+
+### 9.3 Native systemd deployment (no Docker)
+
+The PoC runs Mosquitto, the API and the dashboard as **systemd user
+services** — no Docker required (the broker binary can even be extracted from
+the distro package without root; see the tooling note). Example units under
+`~/.config/systemd/user/`:
+
+`growhub-api.service`:
+
+```ini
+[Unit]
+Description=GrowHub real-time API
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/growhub_/gateway
+ExecStart=%h/growhub_/venv/bin/python -m gateway.api
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+`growhub-dashboard.service`:
+
+```ini
+[Unit]
+Description=GrowHub dashboard
+After=growhub-api.service
+
+[Service]
+WorkingDirectory=%h/growhub_/gateway/frontend
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now growhub-api growhub-dashboard
+loginctl enable-linger "$USER"   # keep services running after logout
+```
+
+The dashboard is then reachable from the LAN at
+`http://<gateway-ip>:3001/`.
+
+### 9.4 Docker deployment (recommended)
+
+The full stack — Mosquitto, InfluxDB, PostgreSQL, Adminer, the Flask API, the
+MQTT→InfluxDB bridge and the Next.js dashboard — runs in Docker Compose:
+
+```bash
+cd gateway
+cp .env.example .env     # then fill in the secrets
+docker compose up -d --build
+```
+
+The API and telemetry-logger are built from `Dockerfile.gateway`; the
+dashboard from `frontend/Dockerfile`. The DB/broker services use their
+official images. Inside the Docker network, services reach each other by
+name — set in `.env`:
+
+```ini
+MQTT_BROKER=mqtt-broker
+INFLUXDB_URL=http://influxdb:8086
+```
+
+`INFLUXDB_TOKEN` is reused both to initialise InfluxDB
+(`DOCKER_INFLUXDB_INIT_ADMIN_TOKEN`) and to authenticate the telemetry
+logger, so the bridge writes telemetry into the bucket as soon as both
+containers are up. Check it with:
+
+```bash
+docker exec growhub-influx influx query \
+  --org "$INFLUXDB_ORG" --token "$INFLUXDB_TOKEN" \
+  'from(bucket: "'"$INFLUXDB_BUCKET"'") |> range(start: -5m) |> limit(n: 5)'
+```
+
+Exposed ports are the same as the native deployment (section 6).
+
+### Docker on Debian — gotchas
+
+- The Compose plugin is **not packaged** by Debian, and `docker.io` ships
+  `buildx` 0.13 while Docker Compose v5 needs buildx ≥ 0.17. Install both
+  from upstream releases: drop the latest `docker-compose` and
+  `docker-buildx` binaries (`aarch64`/`arm64`) into
+  `~/.docker/cli-plugins/` and `chmod +x` them.
+- The frontend proxy target `GROWHUB_API_URL` is baked into the image at
+  build time by `frontend/Dockerfile` (default `http://api:5001`), so the
+  Next.js rewrite always reaches the API container by its Compose service
+  name — no runtime environment variable needed.
+- `mqtt-broker` runs as `user: "${UID}:${GID}"`; make sure
+  `gateway/mosquitto/data/` and `gateway/mosquitto/log/` exist and are owned
+  by that user before the first `docker compose up`, or Mosquitto cannot
+  write its persistence database and log.
