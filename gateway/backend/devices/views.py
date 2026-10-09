@@ -16,6 +16,7 @@ from .serializers import (
     PairingClaimCreateSerializer,
     PairingRedeemSerializer,
     SiteSerializer,
+    TransferSerializer,
 )
 from .services import (
     PairingError,
@@ -104,9 +105,12 @@ class DeviceViewSet(
     def transfer(self, request, pk=None):
         device = self.get_object()
         self._require_owner(device)
-        payload = MembershipWriteSerializer(data=request.data)
+        payload = TransferSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        device.transfer_to(payload.validated_data["username"])
+        device.transfer_to(
+            payload.validated_data["username"],
+            keep_access=payload.validated_data["keep_access"],
+        )
         return Response(DeviceSerializer(device, context={"request": request}).data)
 
 

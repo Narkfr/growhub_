@@ -71,14 +71,29 @@ def test_is_online_tracks_last_seen(device):
     assert device.is_online is False
 
 
-def test_transfer_moves_ownership_and_keeps_members(device, user, other_user):
-    device.add_member(other_user, role=Membership.Role.MEMBER)
+def test_transfer_demotes_the_outgoing_owner_to_read_only(device, user, other_user):
     device.transfer_to(other_user)
 
     roles = {m.user_id: m.role for m in device.memberships.all()}
     assert roles[other_user.id] == Membership.Role.OWNER
-    assert roles[user.id] == Membership.Role.MEMBER
+    assert roles[user.id] == Membership.Role.VIEWER
     assert device.memberships.filter(role=Membership.Role.OWNER).count() == 1
+
+
+def test_clean_handover_removes_the_outgoing_owner(device, user, other_user):
+    device.transfer_to(other_user, keep_access=False)
+
+    assert not device.memberships.filter(user=user).exists()
+    assert device.role_of(other_user) == Membership.Role.OWNER
+
+
+def test_transfer_promotes_existing_member(device, user, other_user):
+    device.add_member(other_user, role=Membership.Role.MEMBER)
+    device.transfer_to(other_user)
+
+    assert device.memberships.filter(user=other_user).count() == 1
+    assert device.role_of(other_user) == Membership.Role.OWNER
+    assert device.role_of(user) == Membership.Role.VIEWER
 
 
 def test_sync_capabilities_from_info_message(device):

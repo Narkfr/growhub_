@@ -24,7 +24,7 @@ le travail se fait dans une branche par jalon, `hermes` reste la branche d'inté
 - [x] **M1** — documents de conception (`docs/architecture.md`, `docs/mqtt-topics.md`, `docs/pairing.md`, ADR)
 - [ ] **M2** — socle Django : `accounts`, `devices`, memberships, admin, API DRF, tests
 - [ ] **M3** — télémétrie PostgreSQL + flux live (SSE) + pont MQTT (worker)
-- [ ] **M4** — appairage Bourgeon : `/claim`, ACL, provisioning des creds
+- [x] **M4** — appairage Bourgeon : `/claim`, ACL, provisioning des creds
 - [ ] **M5** — firmware v2 : `device_id` = `machine.unique_id()`, topic `info`, topic de config, code d'appairage à l'écran
 - [ ] **M6** — front Next : login, liste des Bourgeons, partage, dashboard live
 - [ ] **M7** — infra : retrait de Flask / InfluxDB / Adminer, compose et unités systemd revus, sauvegardes
@@ -45,3 +45,7 @@ Tags prévus : `v0.2` après M4 (back + appairage), `v0.3` après M6, `v1.0` apr
 
 - **2026-10-09 — M0** : `hermes` (36 commits) mergée dans `main` en `--no-ff` (`fdee1c6`), tag annoté `v0.1` poussé. CI relancée sur `main`.
 - **2026-10-09 — M1** : conception écrite (architecture, contrat MQTT, flux d'appairage, 5 ADR).
+- **2026-10-09 — M4** : provisioning réel — hachage PBKDF2 vérifié contre `mosquitto_passwd`,
+  ACL par motifs `%u` générées et rechargées à chaud, publication des creds en retained puis
+  effacement à la première trame du boîtier, révocation du compte d'amorçage, commande
+  `provision_device`, 12 contrôles ACL validés contre un Mosquitto jetable (`tools/mqtt_acl_check.sh`).

@@ -89,6 +89,24 @@ class MembershipWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError("Aucun utilisateur avec ce nom.") from exc
 
 
+class TransferSerializer(serializers.Serializer):
+    """Ownership handover payload.
+
+    ``keep_access`` (default true) keeps the outgoing owner as a read-only
+    viewer; false removes them from the device.
+    """
+
+    username = serializers.CharField()
+
+    keep_access = serializers.BooleanField(default=True)
+
+    def validate_username(self, value):
+        try:
+            return User.objects.get(username=value)
+        except User.DoesNotExist as exc:
+            raise serializers.ValidationError("Aucun utilisateur avec ce nom.") from exc
+
+
 class PairingClaimCreateSerializer(serializers.Serializer):
     """Used by the provisioning tool (staff only)."""
 

@@ -82,6 +82,11 @@ class Device(models.Model):
         Site, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices"
     )
     last_seen = models.DateTimeField(null=True, blank=True)
+    last_state = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Dernier état connu : capteurs, actionneurs, statut et horodatage.",
+    )
     provisioned_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -119,17 +124,18 @@ class Device(models.Model):
         )
         return membership
 
-    def transfer_to(self, user, demote_previous_owner=True):
+    def transfer_to(self, user, keep_access=True):
         """Hand ownership over to ``user``.
 
-        The outgoing owner is demoted to member (read access kept) so a
-        handover never locks anyone out silently; remove them explicitly with
-        the members endpoint if the device is being given away.
+        With ``keep_access`` (default), the outgoing owner drops to read-only
+        (``viewer``): they still see the history and the live state but can no
+        longer drive anything. Pass ``keep_access=False`` for a clean handover
+        (a resale): the outgoing owner leaves the device entirely.
         """
         with transaction.atomic():
             previous = self.memberships.filter(role=Membership.Role.OWNER)
-            if demote_previous_owner:
-                previous.update(role=Membership.Role.MEMBER)
+            if keep_access:
+                previous.update(role=Membership.Role.VIEWER)
             else:
                 previous.delete()
             membership, _ = Membership.objects.update_or_create(
@@ -144,6 +150,7 @@ class Membership(models.Model):
     class Role(models.TextChoices):
         OWNER = "owner", "propriétaire"
         MEMBER = "member", "membre"
+        VIEWER = "viewer", "lecteur (lecture seule)"
 
     device = models.ForeignKey(
         Device, on_delete=models.CASCADE, related_name="memberships"
@@ -233,6 +240,14 @@ class MqttCredential(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    installed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Prouvé par le premier message reçu avec ces identifiants.",
+    )
+    bootstrap_revoked_at = models.DateTimeField(
+        null=True, blank=True, help_text="Compte d'amorçage révoqué."
+    )
     last_used_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

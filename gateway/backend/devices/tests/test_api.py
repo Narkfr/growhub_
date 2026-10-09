@@ -120,7 +120,9 @@ def test_member_cannot_add_members(device, other_user, user):
     assert response.status_code == 403
 
 
-def test_transfer_ownership(auth_client, device, user, other_user):
+def test_transfer_ownership_keeps_read_only_access_by_default(
+    auth_client, device, user, other_user
+):
     device.add_member(other_user, role=Membership.Role.MEMBER)
 
     response = auth_client.post(
@@ -128,7 +130,35 @@ def test_transfer_ownership(auth_client, device, user, other_user):
     )
     assert response.status_code == 200
     assert device.role_of(other_user) == Membership.Role.OWNER
-    assert device.role_of(user) == Membership.Role.MEMBER
+    assert device.role_of(user) == Membership.Role.VIEWER
+
+
+def test_transfer_with_keep_access_false_is_a_clean_handover(
+    auth_client, device, user, other_user
+):
+    response = auth_client.post(
+        f"/api/v1/devices/{device.id}/transfer",
+        {"username": "camille", "keep_access": False},
+        format="json",
+    )
+    assert response.status_code == 200
+    assert device.role_of(other_user) == Membership.Role.OWNER
+    assert device.role_of(user) is None
+    assert auth_client.get(f"/api/v1/devices/{device.id}").status_code == 404
+
+
+def test_viewer_can_read_but_not_rename(auth_client, device, other_user):
+    device.add_member(other_user, role=Membership.Role.VIEWER)
+    viewer_client = APIClient()
+    viewer_client.force_authenticate(user=other_user)
+
+    assert viewer_client.get(f"/api/v1/devices/{device.id}").status_code == 200
+    assert (
+        viewer_client.patch(
+            f"/api/v1/devices/{device.id}", {"name": "Piraté"}, format="json"
+        ).status_code
+        == 403
+    )
 
 
 def test_claim_creation_requires_staff(auth_client, user):

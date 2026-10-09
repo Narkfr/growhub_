@@ -14,4 +14,5 @@ urlpatterns = [
     path("healthz", health, name="health"),
     path("api/v1/", include("accounts.urls")),
     path("api/v1/", include("devices.urls")),
+    path("api/v1/", include("telemetry.urls")),
 ]
