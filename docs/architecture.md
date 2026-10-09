@@ -25,8 +25,8 @@ User            (django.contrib.auth)           identifiant, e-mail, mot de pass
 Site            (optionnel)  owner → User       regroupement (serre, tunnel, parcelle)
 Device          (Bourgeon)   device_id, slug,    nom donné par l'utilisateur, modèle,
                              fw_version,          dernier contact, état de provisionnement
-Membership      (Device × User, role)           owner | member ; un appareil peut être
-                                                partagé, un utilisateur a N appareils
+Membership      (Device × User, role)           owner | member | viewer ; un appareil peut
+                                                être partagé, un utilisateur a N appareils
 DeviceCapability(Device)                        capteurs / actionneurs déclarés (topic info)
 Telemetry       (Device, ts, metric, value, unit)  séries temporelles, indexées (device, ts)
 CommandAudit    (Device, User, cmd_id, payload, résultat, ts)  qui a actionné quoi
@@ -41,6 +41,19 @@ Règles :
 2. Une seule ligne `Membership` avec `role=owner` par appareil (contrainte d'unicité partielle).
 3. **Toute** requête API se filtre par appartenance de l'utilisateur courant
    (`Device.objects.for_user(request.user)`), jamais par un `device_id` reçu du client seul.
+
+Hiérarchie des droits :
+
+| Rôle | Lire | Actionner (capteurs/actionneurs) | Configurer | Membres / transfert |
+| :--- | :--- | :--- | :--- | :--- |
+| `owner` | oui | oui | oui | oui |
+| `member` | oui | oui | non | non |
+| `viewer` | oui | non | non | non |
+
+Cession d'un Bourgeon : `POST /api/v1/devices/{id}/transfer` avec `{"username": "...",
+"keep_access": true}` (défaut) — l'ancien propriétaire devient `viewer` et garde l'historique
+sans pouvoir agir ; avec `"keep_access": false`, il quitte l'appareil (revente). Un cadran ne
+force rien côté boîtier : la propriété est une donnée, pas un topic.
 4. Les credentials MQTT sont stockés hachés ; les mots de passe en clair ne sont affichés
    qu'une fois, au moment du provisioning.
 

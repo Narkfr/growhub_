@@ -124,17 +124,18 @@ class Device(models.Model):
         )
         return membership
 
-    def transfer_to(self, user, demote_previous_owner=True):
+    def transfer_to(self, user, keep_access=True):
         """Hand ownership over to ``user``.
 
-        The outgoing owner is demoted to member (read access kept) so a
-        handover never locks anyone out silently; remove them explicitly with
-        the members endpoint if the device is being given away.
+        With ``keep_access`` (default), the outgoing owner drops to read-only
+        (``viewer``): they still see the history and the live state but can no
+        longer drive anything. Pass ``keep_access=False`` for a clean handover
+        (a resale): the outgoing owner leaves the device entirely.
         """
         with transaction.atomic():
             previous = self.memberships.filter(role=Membership.Role.OWNER)
-            if demote_previous_owner:
-                previous.update(role=Membership.Role.MEMBER)
+            if keep_access:
+                previous.update(role=Membership.Role.VIEWER)
             else:
                 previous.delete()
             membership, _ = Membership.objects.update_or_create(
@@ -149,6 +150,7 @@ class Membership(models.Model):
     class Role(models.TextChoices):
         OWNER = "owner", "propriétaire"
         MEMBER = "member", "membre"
+        VIEWER = "viewer", "lecteur (lecture seule)"
 
     device = models.ForeignKey(
         Device, on_delete=models.CASCADE, related_name="memberships"

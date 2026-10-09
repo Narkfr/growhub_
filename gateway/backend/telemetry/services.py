@@ -220,6 +220,8 @@ class CommandDispatcher:
 
     #: kinds a plain member may trigger; configuration stays owner-only.
     MEMBER_KINDS = ("actuators", "sensors")
+    #: roles allowed to trigger those kinds (a viewer only reads).
+    COMMAND_ROLES = (Membership.Role.OWNER, Membership.Role.MEMBER)
 
     def __init__(self, publisher):
         self.publisher = publisher
@@ -232,7 +234,7 @@ class CommandDispatcher:
         if role is None:
             return False
         if kind in self.MEMBER_KINDS:
-            return True
+            return role in self.COMMAND_ROLES
         return role == Membership.Role.OWNER
 
     def send(self, device, user, kind, action, args=None):

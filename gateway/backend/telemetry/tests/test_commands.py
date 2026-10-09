@@ -36,6 +36,14 @@ def test_member_cannot_send_config(device, other_user, dispatcher):
         dispatcher.send(device, other_user, "config", "SET_INTERVAL", {"seconds": 60})
 
 
+def test_viewer_cannot_send_anything(device, other_user, dispatcher):
+    device.add_member(other_user, role=Membership.Role.VIEWER)
+    assert dispatcher.can_send(device, other_user, "actuators") is False
+    assert dispatcher.can_send(device, other_user, "config") is False
+    with pytest.raises(PermissionError):
+        dispatcher.send(device, other_user, "actuators", "ON")
+
+
 def test_stranger_cannot_send_anything(device, other_user, dispatcher):
     with pytest.raises(PermissionError):
         dispatcher.send(device, other_user, "actuators", "ON")

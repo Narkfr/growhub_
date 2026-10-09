@@ -59,9 +59,13 @@ L'utilisateur PostgreSQL doit pouvoir créer des bases — c'est le cas de l'uti
 | GET/PATCH/DELETE | `/api/v1/devices/{id}` | membre / propriétaire | lecture / renommage / suppression |
 | GET/POST | `/api/v1/devices/{id}/members` | membre / propriétaire | lister / ajouter un membre |
 | DELETE | `/api/v1/devices/{id}/members/{user_id}` | propriétaire | retirer un membre |
-| POST | `/api/v1/devices/{id}/transfer` | propriétaire | céder la propriété |
+| POST | `/api/v1/devices/{id}/transfer` | propriétaire | céder la propriété (`keep_access`, défaut vrai) |
 | POST | `/api/v1/devices/claims` | staff | enregistrer un appareil flashé (outil de provisioning) |
 | POST | `/api/v1/devices/claims/redeem` | connecté | appairer avec le code affiché sur l'OLED |
+
+Trois rôles d'appartenance : `owner` (tout), `member` (lire + actionner), `viewer`
+(lire seulement). Un transfert rétrograde l'ancien propriétaire en `viewer`, sauf
+`keep_access: false` qui le retire complètement de l'appareil.
 
 Règles structurantes :
 
