@@ -2,11 +2,29 @@
 
 import json
 import logging
+import os
+import socket
 import threading
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+
+def process_client_id(base):
+    """Identifiant client unique par processus (et par conteneur).
+
+    Un identifiant MQTT ne porte qu'une seule session : deux processus qui
+    publient sous le même nom se déconnectent mutuellement en boucle — le broker
+    journalise ``session taken over`` sans fin, et l'API comme le worker
+    publient des identifiants d'appairage.
+
+    Le PID ne suffit pas : dans deux conteneurs différents, le processus
+    principal vaut 1 de part et d'autre. Le nom d'hôte du conteneur complète donc
+    le suffixe.
+    """
+    host = socket.gethostname().split(".")[0][:8]
+    return f"{base}-{host}-{os.getpid():x}"
 
 
 class MqttPublisher:
@@ -24,7 +42,7 @@ class MqttPublisher:
         self.port = int(port or settings.MQTT_PORT)
         self.username = username or settings.MQTT_USER
         self.password = password if password is not None else settings.MQTT_PASSWORD
-        self.client_id = client_id or "growhub-backend"
+        self.client_id = process_client_id(client_id or "gh-api")
         self._client = None
         self._lock = threading.Lock()
 

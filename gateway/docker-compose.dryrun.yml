@@ -1,23 +1,42 @@
-# Décalage des ports pour la répétition générale (phase 2 du runbook
-# docs/deploiement-v2.md) : la pile v2 tourne à côté de la v0.1 sans lui prendre
-# ses ports ni ses volumes.
+# Décalage des ports et isolement du broker pour la répétition générale
+# (phase 2 du runbook docs/deploiement-v2.md) : la pile v2 d'essai tourne à côté
+# de la v0.1 sans lui prendre ni ses ports, ni ses fichiers de configuration.
 #
 #   docker compose -p growhub_dryrun \
-#     -f gateway/docker-compose.yml -f gateway/docker-compose.dryrun.yml up -d --build
+#     -f gateway/docker-compose.yml -f gateway/docker-compose.dryrun.yml up -d
 #
-# Le nom de projet distinct (`-p`) sépare les volumes et les noms de conteneurs ;
-# ce fichier ne fait que déplacer ce qui est publié sur l'hôte.
+# Le nom de projet distinct (`-p`) sépare volumes et noms de conteneurs. Le
+# répertoire `config-dryrun` est amorcé par une copie du répertoire réel (mêmes
+# comptes, dont `growhub_api`) : l'essai écrit ses ACL et ses comptes d'appareil
+# là — jamais dans la configuration de la pile en service.
 services:
   mqtt-broker:
-    ports:
+    # `!override` : sans lui, Compose concatène les listes de ports et le broker
+    # d'essai tenterait aussi de prendre le 1883 de la pile en service.
+    ports: !override
       - "1884:1883"
+    volumes:
+      - ./mosquitto/config-dryrun:/mosquitto/config
+      - ./mosquitto/data-dryrun:/mosquitto/data
+      - ./mosquitto/log-dryrun:/mosquitto/log
+
+  mqtt-reloader:
+    volumes:
+      - ./mosquitto/config-dryrun:/mosquitto/config:ro
+      - ./mosquitto/reload-watch.sh:/usr/local/bin/reload-watch.sh:ro
 
   backend:
+    environment:
+      GROWHUB_MOSQUITTO_CONFIG_DIR: /app/gateway/mosquitto/config-dryrun
     # Le tableau de bord proxifie /api vers backend:8000 dans le réseau Compose ;
     # ce port n'est publié que pour les essais directs à la main.
     ports:
       - "127.0.0.1:8000:8000"
 
+  worker:
+    environment:
+      GROWHUB_MOSQUITTO_CONFIG_DIR: /app/gateway/mosquitto/config-dryrun
+
   frontend:
-    ports:
+    ports: !override
       - "3002:3001"

@@ -63,25 +63,65 @@ Sur la branche `chore/m7-infra`, dans le dépôt :
 
 ## Phase 2 — répétition générale à blanc (la v0.1 continue de tourner)
 
-Monter la pile v2 en parallèle, sur un autre nom de projet et d'autres ports, pour
-ne rien perturber :
+Pile v2 complète montée à côté de la v0.1, projet Compose distinct et ports
+décalés :
 
 ```
-docker compose -p growhub_dryrun -f gateway/docker-compose.yml up -d --build \
-  # plus un override qui décale les ports publiés (1884:1883, 3002:3001)
+cd gateway
+docker compose -p growhub_dryrun -f docker-compose.yml -f docker-compose.dryrun.yml up -d
 ```
 
-À valider de bout en bout, avec un **Bourgeon simulé** (script publiant sur
-`growhub/v1/<device_id>/telemetry`) :
+L'override `docker-compose.dryrun.yml` isole aussi le broker : l'essai écrit ses
+comptes et ses ACL dans `mosquitto/config-dryrun`, jamais dans la configuration
+de la pile en service.
 
-- `migrate` passe, l'admin répond, `/healthz` répond ;
-- appairage : code affiché → `/pair` dans le tableau de bord → creds livrées ;
-- ingest : les mesures arrivent en base et dans le flux SSE du dashboard ;
-- ACL : un compte d'appareil ne peut ni lire ni écrire sous le préfixe d'un autre
-  (le modèle existe déjà : `tools/mqtt_acl_check.sh`).
+Déroulé de l'essai, avec le **Bourgeon simulé** (`tools/fake_bourgeon.py`, le test
+d'intégration du jalon M8) :
 
-C'est aussi le test d'intégration de bout en bout prévu au jalon M8 : il n'existe
-pas encore, il naît ici.
+```
+# 1. provisionner un appareil de laboratoire (identifiant volontairement factice)
+docker compose -p growhub_dryrun ... exec -T backend \
+  python gateway/backend/manage.py provision_device ghb-dead01 \
+  --name "Essai M8" --broker mqtt-broker --port 1883 \
+  --secrets-path /tmp/dryrun_secrets.py
+
+# 2. le Bourgeon simulé s'annonce et attend ses identifiants
+docker compose -p growhub_dryrun ... exec -T backend \
+  python tools/fake_bourgeon.py --secrets /tmp/dryrun_secrets.py --frames 5
+
+# 3. racheter le code (POST /api/v1/devices/claims/redeem) puis demander la
+#    livraison des identifiants (POST /api/v1/devices/<pk>/provision)
+```
+
+Contrôles passés le 2026-10-10 : `migrate` et `/healthz` répondent ; les
+identifiants arrivent au boîtier ; 9 à 15 mesures atterrissent en base
+(`telemetry.Telemetry`) et dans le flux SSE ; les capacités sont créées depuis
+l'annonce du boîtier ; le compte d'amorçage est révoqué après appairage ;
+`tools/mqtt_acl_check.sh` passe ses 12 contrôles ; le tableau de bord sert sa page.
+
+### Ce que la répétition a corrigé avant la bascule
+
+1. **Mosquitto mourait au rechargement.** Le backend écrivait les comptes et les
+   ACL en tant que `root` *dans son conteneur*, alors que le broker tourne en
+   `${UID}:${GID}` : il ne pouvait plus relire son fichier de mots de passe et
+   s'arrêtait au lieu de recharger. Les services `backend` et `worker` portent
+   donc `user: "${UID}:${GID}"`.
+2. **Deux processus publiaient sous le même identifiant client** (`gh-prov`), et
+   le broker les déconnectait mutuellement en boucle (`session taken over` à
+   répétition). Le suffixe doit identifier le processus **et** le conteneur : les
+   PID valent 1 dans l'un comme dans l'autre, c'est le nom d'hôte qui tranche
+   (`telemetry/mqtt.py`, fonction `process_client_id`).
+3. **Un nom de service n'est pas une adresse pour le boîtier.** `MQTT_BROKER`
+   vaut `mqtt-broker` dans les conteneurs : écrit tel quel dans `secrets.py`, le
+   Bourgeon ne pourrait pas s'y connecter. D'où l'option `--broker` de
+   `provision_device` (le `.env` garde `localhost` pour l'outillage de l'hôte, le
+   compose remplace par les noms de service).
+4. **Une publication refusée reste muette** (MQTT 3.1.1, QoS 0). Juste après la
+   livraison des identifiants, le broker peut encore ignorer le nouveau compte
+   pendant le temps qu'il relit ses fichiers : le boîtier doit attendre d'être
+   *effectivement connecté* avant d'émettre (`fake_bourgeon.py` le fait comme le
+   firmware, via `is_connected()`), sinon ses premières trames disparaissent sans
+   trace. Le veilleur recharge désormais toutes les 0,5 s.
 
 ## Phase 3 — la bascule (fenêtre courte, Pico en USB)
 
@@ -93,17 +133,22 @@ pas encore, il naît ici.
    `docker compose exec backend python gateway/backend/manage.py migrate`.
 4. `createsuperuser` (compte de Marius), connexion à `http://<pi>:3001`,
    vérification de l'admin.
-5. Lire l'identifiant réel du boîtier sur le matériel, puis le provisionner :
+5. Lire l'identifiant réel du boîtier sur le matériel, puis le provisionner —
+   `--broker` doit être l'adresse par laquelle le **boîtier** voit le broker
+   (l'IP LAN du Pi, jamais le nom de service Compose) :
    ```
    mpremote connect /dev/ttyACM0 exec "import machine, ubinascii; print('ghb-' + ubinascii.hexlify(machine.unique_id()).decode()[-6:])"
    docker compose exec backend python gateway/backend/manage.py provision_device ghb-xxxxxx \
-       --secrets-path firmware/secrets.py
+       --name "Serre" --broker 192.168.1.113 --port 1883 --secrets-path firmware/secrets.py
    ```
 6. Flasher le boîtier (séquence watchdog de `growhub-pico-deploy`) : `main.py`,
    `constants.py`, `src/**` (dont `src/display/`), `lib/ssd1306.py`,
    `manifest.py` **mis à jour en place** (section `display.fields`) et le
-   `secrets.py` produit à l'étape 5. Le boîtier démarre en mode appairage :
-   l'écran affiche `BOURGEON`, le code et l'identifiant.
+   `secrets.py` produit à l'étape 5. **Le fragment généré porte
+   `"WIFI_SSID": ""`** : y recopier les identifiants WiFi du boîtier (ceux de la
+   sauvegarde de la phase 1), sinon la carte ne rejoint plus le réseau. Le
+   boîtier démarre alors en mode appairage : l'écran affiche `BOURGEON`, le code
+   et l'identifiant.
 7. Appairer dans le tableau de bord (`/pair`), puis vérifier : le boîtier reçoit
    ses creds, écrit `creds.json`, redémarre, et la télémétrie remonte.
 8. Laisser tourner 15 à 30 minutes : compter les mesures en base, surveiller les
