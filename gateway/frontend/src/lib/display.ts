@@ -17,8 +17,14 @@ export function statusLabel(status: string): string {
       return 'En ligne';
     case 'offline':
       return 'Hors ligne';
+    // Cycle de vie de l'appareil (ce que le serveur tient côté base).
+    case 'pending':
     case 'provisioning':
       return 'En attente';
+    case 'provisioned':
+      return 'Appairé';
+    case 'disabled':
+      return 'Désactivé';
     default:
       return 'Inconnu';
   }

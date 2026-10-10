@@ -47,6 +47,26 @@ def test_provision_device_publishes_credentials_retained(claimed_device, no_real
     assert message["payload"]["password"] == password
 
 
+def test_the_handover_carries_the_address_the_device_must_use(
+    claimed_device, no_real_mqtt, settings
+):
+    """Le boîtier reçoit l'adresse qui le concerne, pas celle du réseau Compose.
+
+    Dans un conteneur, ``MQTT_BROKER`` est le nom du service ; recopié dans
+    ``creds.json``, il est intraduisible pour un Bourgeon sur le réseau — il ne
+    peut plus se connecter du tout.
+    """
+    settings.MQTT_BROKER = "mqtt-broker"
+    settings.GROWHUB["DEVICE_BROKER"] = "192.168.1.113"
+    settings.GROWHUB["DEVICE_BROKER_PORT"] = 1883
+
+    provisioning.provision_device(claimed_device)
+
+    payload = no_real_mqtt.messages[-1]["payload"]
+    assert payload["broker"] == "192.168.1.113"
+    assert payload["port"] == 1883
+
+
 def test_first_message_with_real_credentials_closes_the_pairing(
     claimed_device, no_real_mqtt
 ):

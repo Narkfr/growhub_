@@ -98,8 +98,9 @@ def provision_device(device, broker=None, publisher=None, password=None):
     payload = {
         "username": device.device_id,
         "password": password,
-        "broker": settings.MQTT_BROKER,
-        "port": settings.MQTT_PORT,
+        # L'adresse que le boîtier doit utiliser, pas celle du réseau Compose.
+        "broker": settings.GROWHUB["DEVICE_BROKER"],
+        "port": settings.GROWHUB["DEVICE_BROKER_PORT"],
     }
     publisher.publish(
         topics.provision_credentials_topic(device.device_id), payload, retain=True

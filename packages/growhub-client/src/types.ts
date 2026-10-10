@@ -7,7 +7,11 @@
 
 export type Role = 'owner' | 'member' | 'viewer';
 
-export type DeviceStatus = 'provisioning' | 'online' | 'offline' | 'unknown';
+/** Statut d'exécution, publié par le boîtier lui-même (`online` / `offline`). */
+export type RuntimeStatus = 'online' | 'offline';
+
+/** Statut de cycle de vie de l'appareil, tenu par le serveur. */
+export type DeviceStatus = 'pending' | 'provisioned' | 'disabled';
 
 export type CommandKind = 'actuators' | 'sensors' | 'config';
 
@@ -65,7 +69,7 @@ export interface LiveDevice {
   device_id: string;
   name: string;
   slug: string;
-  status: DeviceStatus;
+  status: RuntimeStatus;
   is_online: boolean;
   last_seen: string | null;
   site: string | null;

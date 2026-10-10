@@ -4,7 +4,8 @@ import json
 import pytest
 from rest_framework.test import APIClient
 from telemetry.models import CommandAudit, Telemetry
-from telemetry.services import handle_message
+from telemetry.services import handle_message, record_status
+from telemetry.views import build_live_snapshot
 
 pytestmark = pytest.mark.django_db
 
@@ -157,6 +158,9 @@ def test_live_stream_headers_and_frames(client, user, device, monkeypatch, setti
     assert response.status_code == 200
     assert response["Content-Type"].startswith("text/event-stream")
     assert response["Cache-Control"] == "no-cache"
+    # Un flux compressé se fait bufferiser par le navigateur : plus aucune mesure
+    # en direct dans le tableau de bord, alors que l'historique fonctionne.
+    assert response["Content-Encoding"] == "identity"
 
     frames = asyncio.run(_collect_frames(response, 3))
     assert frames[0].startswith("retry: ")
@@ -181,6 +185,23 @@ async def _collect_frames(response, count):
 def test_live_stream_requires_a_session(client):
     response = client.get("/api/v1/live/stream")
     assert response.status_code == 401
+
+
+def test_live_snapshot_reports_the_runtime_status(device, user):
+    """Le flux annonce l'état d'exécution, pas le cycle de vie de l'appareil.
+
+    Envoyer « provisioned » faisait afficher « Inconnu » sur la carte du tableau de
+    bord, alors que le boîtier publie bien `online` / `offline`.
+    """
+    record_status(device, "online")
+    device.refresh_from_db()
+
+    assert build_live_snapshot(user)["devices"][0]["status"] == "online"
+
+    record_status(device, "offline")
+    device.refresh_from_db()
+
+    assert build_live_snapshot(user)["devices"][0]["status"] == "offline"
 
 
 def test_telemetry_ordering_is_newest_first(device, user):

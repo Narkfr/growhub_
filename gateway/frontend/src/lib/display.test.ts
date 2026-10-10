@@ -35,6 +35,10 @@ describe('statusLabel', () => {
     expect(statusLabel('online')).toBe('En ligne');
     expect(statusLabel('offline')).toBe('Hors ligne');
     expect(statusLabel('provisioning')).toBe('En attente');
+    // Cycle de vie : ce que le serveur renvoie pour l'appareil lui-même.
+    expect(statusLabel('pending')).toBe('En attente');
+    expect(statusLabel('provisioned')).toBe('Appairé');
+    expect(statusLabel('disabled')).toBe('Désactivé');
     expect(statusLabel('autre')).toBe('Inconnu');
   });
 });

@@ -81,7 +81,13 @@ export class GrowHubClient {
     if (!options.fetch && !globalFetch) {
       throw new Error('Aucune implémentation de fetch : en passer une dans les options.');
     }
-    this.fetchImpl = options.fetch ?? (globalFetch as FetchLike);
+    // Le `fetch` du navigateur est une fonction native de `window` : appelé comme
+    // méthode de cet objet-ci, il lève « Illegal invocation » *avant* toute
+    // requête — sans rien envoyer et sans laisser de trace réseau. On l'appelle
+    // donc par une fonction fléchée, qui ne lui impose aucun récepteur.
+    this.fetchImpl =
+      options.fetch ??
+      ((input, init) => (globalFetch as FetchLike)(input, init));
     this.credentials = options.credentials ?? 'include';
     this.csrfToken = options.csrfToken ?? (() => readCsrfCookie());
   }

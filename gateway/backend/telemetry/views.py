@@ -51,7 +51,11 @@ def build_live_snapshot(user):
                 "device_id": device.device_id,
                 "name": device.name,
                 "slug": device.slug,
-                "status": device.status,
+                # Statut d'exécution, pas le cycle de vie : le tableau de bord en
+                # déduit « En ligne » / « Hors ligne ». Envoyer `device.status`
+                # (« provisioned ») affichait « Inconnu » sur la carte.
+                "status": state.get("status")
+                or ("online" if device.is_online else "offline"),
                 "is_online": device.is_online,
                 "last_seen": device.last_seen.isoformat() if device.last_seen else None,
                 "site": device.site.name if device.site else None,
@@ -112,6 +116,13 @@ class LiveStreamView(View):
         )
         response["Cache-Control"] = "no-cache"
         response["X-Accel-Buffering"] = "no"
+        # Un flux SSE ne doit jamais être compressé : un compresseur bufferise par
+        # blocs, et le navigateur ne voit alors les événements qu'à la fermeture —
+        # donc jamais. Constaté en production : 10 octets reçus en 6 s en gzip
+        # contre 446 en clair, tableau de bord figé sur « Sans nouvelles » alors
+        # que l'historique (appel classique) fonctionnait. Déclarer `identity`
+        # empêche le proxy du tableau de bord de recompresser la réponse.
+        response["Content-Encoding"] = "identity"
         return response
 
 

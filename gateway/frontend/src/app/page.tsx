@@ -23,7 +23,8 @@ export default function Home() {
     return <main className="mx-auto max-w-5xl px-6 py-10 text-slate-400">Chargement…</main>;
   }
 
-  const pending = devices.filter((device) => device.status === 'provisioning');
+  // « pending » est le statut de cycle de vie d'un Bourgeon pas encore appairé.
+  const pending = devices.filter((device) => device.status === 'pending');
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">

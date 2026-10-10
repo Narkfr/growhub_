@@ -33,6 +33,17 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,growhub.local")
 
+# Origines acceptées pour les requêtes non sures (POST/PUT/DELETE/PATCH).
+# Django compare l'en-tête `Origin` du navigateur à l'hôte de la requête : derrière
+# le proxy du tableau de bord, l'hôte vu par Django est le nom du service Compose
+# (`backend:8000`), jamais celui du navigateur. Sans cette liste, toute commande
+# échoue en « Origin checking failed » — la connexion, elle, passe (elle est
+# anonyme, donc dispensée de jeton CSRF).
+CSRF_TRUSTED_ORIGINS = env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    "http://localhost:3001,http://127.0.0.1:3001",
+)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -125,6 +136,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Réponses JSON uniquement. Sans cela, DRF sert sa page « browsable API » en
+    # HTML dès qu'un client annonce préférer `text/html` — c'est le cas de tout
+    # navigateur. Le SPA tente alors de lire du JSON, échoue, et affiche
+    # « Impossible de joindre l'API » à la place du vrai message (« Identifiants
+    # invalides. »), et la page HTML expose en prime un formulaire d'essai.
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_FILTER_BACKENDS": [],
@@ -156,6 +175,14 @@ GROWHUB = {
     "MQTT_RELOAD_COMMAND": os.environ.get("GROWHUB_MQTT_RELOAD_COMMAND", ""),
     # How often the SSE stream re-reads the database (seconds).
     "LIVE_POLL_SECONDS": float(os.environ.get("GROWHUB_LIVE_POLL_SECONDS", "2")),
+    # Adresse du broker telle que le *boîtier* doit la voir. Dans un conteneur,
+    # MQTT_BROKER est le nom du service Compose : le Bourgeon, lui, est sur le
+    # réseau et a besoin de l'IP de la passerelle. Ces deux valeurs partent dans
+    # le secrets.py du boîtier et dans le message d'appairage.
+    "DEVICE_BROKER": os.environ.get("GROWHUB_DEVICE_BROKER", MQTT_BROKER),
+    "DEVICE_BROKER_PORT": int(
+        os.environ.get("GROWHUB_DEVICE_BROKER_PORT", str(MQTT_PORT))
+    ),
     # A device with no message for this long is shown as offline.
     "DEVICE_STALE_AFTER_SECONDS": int(
         os.environ.get("GROWHUB_DEVICE_STALE_AFTER", "300")
