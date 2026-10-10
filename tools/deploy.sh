@@ -132,6 +132,14 @@ deploy_revision() {
         git_at checkout -q --detach "$ref"
     fi
 
+    # Le script qui tourne est celui de la révision *précédente* : il s'est recopié
+    # hors du dépôt avant de commencer. Si la révision déployée en porte une autre
+    # version, elle ne prendra effet qu'au déploiement suivant — le dire plutôt que
+    # de laisser croire qu'elle est déjà appliquée.
+    if [ -f "$REPO_DIR/tools/deploy.sh" ] && ! cmp -s "$0" "$REPO_DIR/tools/deploy.sh"; then
+        log "note : la révision déployée porte une autre version de ce script ; elle prendra effet au prochain déploiement"
+    fi
+
     if [ "$dry_run" = "0" ] && [ -x "$REPO_DIR/tools/backup.sh" ]; then
         # Avant toute migration : la base est la seule chose que git ne sait pas
         # remettre en place.
@@ -140,6 +148,23 @@ deploy_revision() {
 
     compose up -d --build --remove-orphans
     compose exec -T backend "${MANAGE[@]}" migrate --noinput
+}
+
+rollback() {
+    # Le même chemin pour toutes les façons d'échouer : contrôle de santé négatif,
+    # mais aussi reconstruction qui casse en cours de route (une pile à moitié
+    # recréée sans rien tenter serait le pire des états).
+    log "retour arrière vers $(git_at rev-parse --short "$previous")"
+    git_at checkout -q --detach "$previous"
+    compose up -d --build --remove-orphans
+    compose exec -T backend "${MANAGE[@]}" migrate --noinput || true
+
+    if expected_health; then
+        log "retour arrière effectué : $(git_at rev-parse --short HEAD) est de nouveau en place"
+    else
+        log "le retour arrière n'a pas suffi — la pile demande un regard humain"
+    fi
+    exit 1
 }
 
 # --- déroulé -----------------------------------------------------------------
@@ -167,7 +192,8 @@ else
         log "mode simulation : rien n'a été touché"
         exit 0
     fi
-    deploy_revision "$target" "$previous"
+    deploy_revision "$target" "$previous" ||
+        { log "échec pendant la reconstruction de $target"; rollback; }
 fi
 
 if expected_health; then
@@ -182,14 +208,5 @@ if [ "$deployed" = "0" ]; then
     exit 1
 fi
 
-log "contrôle de santé en échec — retour arrière vers $(git_at rev-parse --short "$previous")"
-git_at checkout -q --detach "$previous"
-compose up -d --build --remove-orphans
-compose exec -T backend "${MANAGE[@]}" migrate --noinput || true
-
-if expected_health; then
-    log "retour arrière effectué : $(git_at rev-parse --short HEAD) est de nouveau en place"
-else
-    log "le retour arrière n'a pas suffi — la pile demande un regard humain"
-fi
-exit 1
+log "contrôle de santé en échec"
+rollback
