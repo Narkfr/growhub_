@@ -66,19 +66,31 @@ class Command(BaseCommand):
                     self._running = False
                 if time.monotonic() - last_sweep >= STALE_TRACKER_INTERVAL:
                     last_sweep = time.monotonic()
-                    try:
-                        expired = services.expire_pending_commands()
-                        if expired:
-                            logger.info(
-                                "%s commande(s) sans réponse marquée(s) en timeout",
-                                expired,
-                            )
-                    except Exception:
-                        logger.exception("échec du balayage des commandes en attente")
+                    self.sweep()
         finally:
             client.loop_stop()
             client.disconnect()
             self.stdout.write("worker MQTT arrêté")
+
+    def sweep(self):
+        """Marque en timeout les commandes restées sans réponse.
+
+        `close_old_connections` d'abord : ce processus vit plus longtemps que sa
+        connexion à la base. Quand la base redémarre (recréation de conteneur), la
+        connexion reste ouverte de son point de vue et tout accès lève « the
+        connection is closed » — constaté en production, un traceback toutes les
+        30 s jusqu'au redémarrage du worker. Le chemin d'ingestion appelait déjà
+        cette remise à zéro ; ce balayage, non.
+        """
+        close_old_connections()
+        try:
+            expired = services.expire_pending_commands()
+        except Exception:
+            logger.exception("échec du balayage des commandes en attente")
+            return 0
+        if expired:
+            logger.info("%s commande(s) sans réponse marquée(s) en timeout", expired)
+        return expired
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
         if reason_code != 0:
