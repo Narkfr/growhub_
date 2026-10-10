@@ -9,6 +9,7 @@ from devices.models import Device
 from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views import View
 from growhub import topics
@@ -64,7 +65,15 @@ def build_live_snapshot(user):
                 "ts": state.get("ts"),
             }
         )
-    return {"devices": devices, "count": len(devices)}
+    # Le tableau de bord juge la fraîcheur sur l'horloge du serveur : il lui faut
+    # donc l'heure du serveur, pas la sienne. Comparer `last_seen` (heure serveur)
+    # à `Date.now()` (horloge du navigateur) fait clignoter le badge « Sans
+    # nouvelles » dès que les deux montres diffèrent — et toute montre diffère.
+    return {
+        "devices": devices,
+        "count": len(devices),
+        "now": timezone.now().isoformat(),
+    }
 
 
 class LiveSnapshotView(APIView):
