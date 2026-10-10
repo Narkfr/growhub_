@@ -144,8 +144,11 @@ l'annonce du boîtier ; le compte d'amorçage est révoqué après appairage ;
 6. Flasher le boîtier (séquence watchdog de `growhub-pico-deploy`) : `main.py`,
    `constants.py`, `src/**` (dont `src/display/`), `lib/ssd1306.py`,
    `manifest.py` **mis à jour en place** (section `display.fields`) et le
-   `secrets.py` produit à l'étape 5. Le boîtier démarre en mode appairage :
-   l'écran affiche `BOURGEON`, le code et l'identifiant.
+   `secrets.py` produit à l'étape 5. **Le fragment généré porte
+   `"WIFI_SSID": ""`** : y recopier les identifiants WiFi du boîtier (ceux de la
+   sauvegarde de la phase 1), sinon la carte ne rejoint plus le réseau. Le
+   boîtier démarre alors en mode appairage : l'écran affiche `BOURGEON`, le code
+   et l'identifiant.
 7. Appairer dans le tableau de bord (`/pair`), puis vérifier : le boîtier reçoit
    ses creds, écrit `creds.json`, redémarre, et la télémétrie remonte.
 8. Laisser tourner 15 à 30 minutes : compter les mesures en base, surveiller les
