@@ -28,7 +28,7 @@ le travail se fait dans une branche par jalon, `hermes` reste la branche d'inté
 - [x] **M5** — firmware v2 : `device_id` = `machine.unique_id()`, topic `info`, topic de config, code d'appairage à l'écran
 - [x] **M6** — front Next : login, liste des Bourgeons, partage, dashboard live
 - [x] **M7** — infra : retrait de Flask / InfluxDB / Adminer, compose et unités systemd revus, sauvegardes
-- [ ] **M8** — CI/CD : runner self-hosted, jobs build + deploy, runbook et rollback
+- [x] **M8** — CI/CD : runner self-hosted, jobs build + deploy, runbook et rollback
 - [ ] **M9** — documentation finale, CHANGELOG, dépendances à jour
 
 Paquet partagé `@growhub/client` : types et client API réutilisables par l’application mobile (React Native) — voir `docs/front.md`.
@@ -47,6 +47,15 @@ il n'ajoute donc pas de tag.
 
 ## Journal
 
+- **2026-10-10 — M8** : déploiement continu. Un runner auto-hébergé sur le Pi
+  (`pi-growhub`, service utilisateur, `linger` activé) attend le verdict de la CI ;
+  si `main` est verte, `.github/workflows/deploy.yml` lui fait exécuter
+  `tools/deploy.sh` sur la copie de production `~/growhub_`. Le script sauvegarde
+  la base **avant** la migration, reconstruit, migre, puis contrôle le service
+  (page, API, six conteneurs) et **revient tout seul** à la révision précédente si
+  le contrôle échoue. Choix de Marius : runner local plutôt qu'un SSH entrant, et
+  déploiement automatique plutôt qu'une approbation à chaque fois. Runbook :
+  `docs/deploiement-cd.md`.
 - **2026-10-10 — M7** : bascule de la v2 en production, sur le vrai matériel. Pile v2 dans
   `gateway/docker-compose.yml` (postgres, mosquitto, `mqtt-reloader`, backend ASGI, worker, front),
   l'ancienne conservée dans `docker-compose.v1.yml` ; ses quatre conteneurs retirés après vérification,

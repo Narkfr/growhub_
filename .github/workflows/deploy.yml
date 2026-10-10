@@ -1,0 +1,62 @@
+name: Deploy
+
+# Le déploiement suit le verdict de la CI : il ne part que si `main` est verte.
+# La pile tourne sur le Pi, où un runner auto-hébergé exécute ce travail — rien à
+# exposer sur le réseau, aucune clé SSH à gérer, et la construction se fait sur
+# place (le Pi est ARM64 : aucune image à faire fabriquer ailleurs).
+#
+# Le travail appelle `tools/deploy.sh`, qui vit dans la copie de production
+# `~/growhub_` : elle seule porte `.env`, le fichier de mots de passe Mosquitto et
+# l'ACL. C'est pourquoi aucun `actions/checkout` n'apparaît ici — déployer depuis
+# l'espace de travail du runner priverait la pile de ses secrets.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit à déployer (retour arrière). Vide : la branche main."
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Déployer sur le Pi
+    # Un `workflow_run` se déclenche aussi quand la CI échoue : on n'y va que sur
+    # un verdict vert, ou quand un humain a demandé le déploiement à la main.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: [self-hosted, growhub-gateway]
+    steps:
+      - name: Déployer la révision validée
+        env:
+          # La révision exacte qu'a validée la CI, ou celle demandée à la main.
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+          REQUESTED_REF: ${{ github.event.inputs.ref }}
+        run: |
+          set -euo pipefail
+          ref="${REQUESTED_REF:-$VALIDATED_SHA}"
+          if [ -n "$ref" ]; then
+            "$HOME/growhub_/tools/deploy.sh" --ref "$ref"
+          else
+            "$HOME/growhub_/tools/deploy.sh"
+          fi
+
+      - name: Résumé
+        if: always()
+        run: |
+          {
+            echo "### Déploiement growhub_"
+            echo
+            echo "- révision demandée : \`${REQUESTED_REF:-${VALIDATED_SHA:-main}}\`"
+            echo "- révision en place : \`$(git -C "$HOME/growhub_" rev-parse --short HEAD 2>/dev/null || echo inconnue)\`"
+            echo "- état enregistré dans \`~/growhub_backups/deploy-state\`"
+          } >> "$GITHUB_STEP_SUMMARY"
