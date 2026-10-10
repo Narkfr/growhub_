@@ -112,6 +112,13 @@ class LiveStreamView(View):
         )
         response["Cache-Control"] = "no-cache"
         response["X-Accel-Buffering"] = "no"
+        # Un flux SSE ne doit jamais être compressé : un compresseur bufferise par
+        # blocs, et le navigateur ne voit alors les événements qu'à la fermeture —
+        # donc jamais. Constaté en production : 10 octets reçus en 6 s en gzip
+        # contre 446 en clair, tableau de bord figé sur « Sans nouvelles » alors
+        # que l'historique (appel classique) fonctionnait. Déclarer `identity`
+        # empêche le proxy du tableau de bord de recompresser la réponse.
+        response["Content-Encoding"] = "identity"
         return response
 
 

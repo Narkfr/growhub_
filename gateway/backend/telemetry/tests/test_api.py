@@ -157,6 +157,9 @@ def test_live_stream_headers_and_frames(client, user, device, monkeypatch, setti
     assert response.status_code == 200
     assert response["Content-Type"].startswith("text/event-stream")
     assert response["Cache-Control"] == "no-cache"
+    # Un flux compressé se fait bufferiser par le navigateur : plus aucune mesure
+    # en direct dans le tableau de bord, alors que l'historique fonctionne.
+    assert response["Content-Encoding"] == "identity"
 
     frames = asyncio.run(_collect_frames(response, 3))
     assert frames[0].startswith("retry: ")
