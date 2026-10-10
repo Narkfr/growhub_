@@ -125,6 +125,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # Réponses JSON uniquement. Sans cela, DRF sert sa page « browsable API » en
+    # HTML dès qu'un client annonce préférer `text/html` — c'est le cas de tout
+    # navigateur. Le SPA tente alors de lire du JSON, échoue, et affiche
+    # « Impossible de joindre l'API » à la place du vrai message (« Identifiants
+    # invalides. »), et la page HTML expose en prime un formulaire d'essai.
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
     "DEFAULT_FILTER_BACKENDS": [],

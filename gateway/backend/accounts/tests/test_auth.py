@@ -43,6 +43,29 @@ def test_login_refuses_bad_credentials(client, user):
     assert response.json()["detail"] == "Identifiants invalides."
 
 
+def test_errors_are_json_even_for_a_browser(client, user):
+    """Un navigateur annonce préférer `text/html` : l'erreur doit rester du JSON.
+
+    Sinon DRF sert sa page « browsable API », le SPA échoue à la lire et affiche
+    « Impossible de joindre l'API » au lieu de la vraie raison — constaté sur le
+    tableau de bord en production.
+    """
+    browser = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+    response = client.post(
+        "/api/v1/auth/login",
+        {"username": "marius", "password": "faux"},
+        content_type="application/json",
+        HTTP_ACCEPT=browser,
+    )
+    assert response.status_code == 401
+    assert response["Content-Type"].startswith("application/json")
+    assert response.json()["detail"] == "Identifiants invalides."
+
+    anonymous = client.get("/api/v1/auth/me", HTTP_ACCEPT=browser)
+    assert anonymous["Content-Type"].startswith("application/json")
+
+
 def test_login_refuses_an_inactive_account(client, user):
     user.is_active = False
     user.save(update_fields=["is_active"])
