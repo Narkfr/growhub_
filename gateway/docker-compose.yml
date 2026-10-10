@@ -1,9 +1,38 @@
+# GrowHub v2 — Django 5.2 + DRF, PostgreSQL comme unique base, appairage des
+# Bourgeons et ACL MQTT par appareil.
+#
+# L'ancienne pile (Flask + InfluxDB + Adminer) est conservée telle quelle dans
+# `docker-compose.v1.yml` : c'est le chemin de retour arrière, décrit dans
+# `docs/deploiement-v2.md`.
+#
+# Aucun conteneur ne porte de `container_name` figé : les scripts retrouvent ce
+# qu'ils cherchent par les étiquettes Compose, ce qui permet de monter la pile en
+# parallèle sur un autre projet (`docker compose -p growhub_dryrun ...`) sans que
+# les deux se marchent dessus.
 services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Volontairement sans port publié : la base n'est joignable que depuis le
+    # réseau Compose (règle : 5432 ne sort jamais de la machine).
+
   mqtt-broker:
     image: eclipse-mosquitto:latest
-    container_name: growhub-mqtt
     restart: always
     ports:
+      # Le Bourgeon s'y connecte depuis le LAN, en clair : jamais exposé à
+      # Internet sans TLS (voir docs/gateway_setup.md).
       - "1883:1883"
     volumes:
       - ./mosquitto/config:/mosquitto/config
@@ -11,93 +40,97 @@ services:
       - ./mosquitto/log:/mosquitto/log
     user: "${UID}:${GID}"
 
-  influxdb:
-    image: influxdb:latest
-    container_name: growhub-influx
+  mqtt-reloader:
+    # Mosquitto ne relit `password_file` et `acl_file` que sur SIGHUP. Le backend
+    # écrit ces fichiers dans le dossier partagé ; ce veilleur envoie le signal
+    # dès qu'ils changent. C'est le seul service qui voit le socket Docker.
+    image: docker:cli
     restart: always
-    ports:
-      - "8086:8086"
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER}
-      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
-      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
     volumes:
-      - influxdb-data:/var/lib/influxdb2
-
-  postgres:
-    image: postgres:15
-    container_name: growhub-postgres
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-
-  adminer:
-    image: adminer
-    container_name: growhub-adminer
-    restart: always
-    ports:
-      - "8080:8080"
-
-  api:
-    build:
-      context: ..
-      dockerfile: gateway/Dockerfile.gateway
-    container_name: growhub-api
-    restart: always
-    ports:
-      - "5001:5001"
-    environment:
-      - MQTT_BROKER=mqtt-broker
-      - MQTT_PORT=1883
-      - MQTT_USER=${MQTT_USER}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - GROWHUB_API_HOST=0.0.0.0
-      - GROWHUB_API_PORT=5001
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/reload-watch.sh:/usr/local/bin/reload-watch.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/reload-watch.sh"]
     depends_on:
       - mqtt-broker
 
-  telemetry-logger:
+  backend:
     build:
       context: ..
-      dockerfile: gateway/Dockerfile.gateway
-    container_name: growhub-telemetry-logger
+      dockerfile: gateway/backend/Dockerfile
+    image: growhub-backend:local
     restart: always
+    command:
+      - uvicorn
+      - growhub.asgi:application
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --app-dir
+      - gateway/backend
     environment:
-      - MQTT_BROKER=mqtt-broker
-      - MQTT_PORT=1883
-      - MQTT_USER=${MQTT_USER}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - INFLUXDB_URL=http://influxdb:8086
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
-      - INFLUXDB_ORG=${INFLUXDB_ORG}
-      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
-    command: ["python", "-m", "gateway.telemetry_logger"]
+      DJANGO_SETTINGS_MODULE: growhub.settings
+    env_file:
+      - .env
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      # Le dépôt est monté dans l'image : le code exécuté est celui du dépôt, et
+      # les commandes de gestion écrivent côté hôte (`firmware/secrets.py`,
+      # `gateway/mosquitto/config`).
+      - ..:/app
     depends_on:
-      - mqtt-broker
-      - influxdb
+      postgres:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_started
+    # Pas de port publié : le tableau de bord proxifie /api vers `backend:8000`.
+
+  worker:
+    # Pont MQTT → base (ingest télémétrie, ack des commandes) : un processus à
+    # part, même image que l'API.
+    build:
+      context: ..
+      dockerfile: gateway/backend/Dockerfile
+    image: growhub-backend:local
+    restart: always
+    command: ["python", "gateway/backend/manage.py", "mqtt_bridge"]
+    environment:
+      DJANGO_SETTINGS_MODULE: growhub.settings
+    env_file:
+      - .env
+    volumes:
+      - ..:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_started
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: growhub-frontend
+      context: ..
+      dockerfile: gateway/frontend/Dockerfile
+      args:
+        GROWHUB_API_URL: http://backend:8000
+    image: growhub-frontend-v2:local
     restart: always
     ports:
       - "3001:3001"
     environment:
-      - GROWHUB_API_URL=http://api:5001
+      # Lu au démarrage : c'est la cible des `rewrites` de next.config.mjs.
+      GROWHUB_API_URL: http://backend:8000
     depends_on:
-      - api
+      - backend
 
 volumes:
-  influxdb-data:
   postgres-data:

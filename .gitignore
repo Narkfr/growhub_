@@ -18,6 +18,7 @@ gateway/.env
 firmware/secrets.py
 firmware/manifest.py
 gateway/mosquitto/config/password_file
+gateway/mosquitto/config/acl_file
 
 # Python build artifacts
 *.egg-info/

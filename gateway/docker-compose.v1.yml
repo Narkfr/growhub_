@@ -1,0 +1,103 @@
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: growhub-mqtt
+    restart: always
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    user: "${UID}:${GID}"
+
+  influxdb:
+    image: influxdb:latest
+    container_name: growhub-influx
+    restart: always
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  postgres:
+    image: postgres:15
+    container_name: growhub-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    container_name: growhub-adminer
+    restart: always
+    ports:
+      - "8080:8080"
+
+  api:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile.gateway
+    container_name: growhub-api
+    restart: always
+    ports:
+      - "5001:5001"
+    environment:
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - GROWHUB_API_HOST=0.0.0.0
+      - GROWHUB_API_PORT=5001
+    depends_on:
+      - mqtt-broker
+
+  telemetry-logger:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile.gateway
+    container_name: growhub-telemetry-logger
+    restart: always
+    environment:
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+    command: ["python", "-m", "gateway.telemetry_logger"]
+    depends_on:
+      - mqtt-broker
+      - influxdb
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: growhub-frontend
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - GROWHUB_API_URL=http://api:5001
+    depends_on:
+      - api
+
+volumes:
+  influxdb-data:
+  postgres-data:

@@ -1,0 +1,23 @@
+# Décalage des ports pour la répétition générale (phase 2 du runbook
+# docs/deploiement-v2.md) : la pile v2 tourne à côté de la v0.1 sans lui prendre
+# ses ports ni ses volumes.
+#
+#   docker compose -p growhub_dryrun \
+#     -f gateway/docker-compose.yml -f gateway/docker-compose.dryrun.yml up -d --build
+#
+# Le nom de projet distinct (`-p`) sépare les volumes et les noms de conteneurs ;
+# ce fichier ne fait que déplacer ce qui est publié sur l'hôte.
+services:
+  mqtt-broker:
+    ports:
+      - "1884:1883"
+
+  backend:
+    # Le tableau de bord proxifie /api vers backend:8000 dans le réseau Compose ;
+    # ce port n'est publié que pour les essais directs à la main.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    ports:
+      - "3002:3001"

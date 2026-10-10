@@ -1,0 +1,28 @@
+# ACL Mosquitto — amorçage (modèle).
+#
+# À copier en `acl_file` au premier déploiement : `cp acl_file.example acl_file`
+# (le fichier réel est ignoré par git, comme `password_file`). Mosquitto refuse
+# de démarrer si `acl_file` est déclaré dans mosquitto.conf et absent.
+#
+# Ce contenu est RÉÉCRIT EN ENTIER par le backend dès le premier appairage
+# (`gateway/backend/telemetry/mosquitto.py`, fonction `render_acl`) : un appareil
+# ne peut lire et écrire que sous `growhub/v1/<son device_id>/…`.
+#
+# Il sert aussi à maintenir l'ancienne pile v0.1 en état de fonctionner (retour
+# arrière, voir docs/deploiement-v2.md) tant qu'aucun appareil n'est appairé en
+# v2 : le bloc « transition » disparaît à la première écriture du backend.
+
+# --- Compte de service v2 : lit toute la télémétrie, commande les appareils ----
+user growhub_api
+topic read #
+topic write growhub/v1/+/cmd/#
+topic readwrite growhub/v1/provision/#
+
+# --- Transition v0.1 (à retirer au jalon M7 phase 4) ---------------------------
+# `growhub_device1` est le compte partagé du boîtier en service, et `growhub_api`
+# publie les commandes d'actionneur de l'ancienne API.
+user growhub_device1
+topic readwrite GrowHubClient-/#
+
+user growhub_api
+topic write GrowHubClient-/#
