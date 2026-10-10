@@ -33,6 +33,17 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,growhub.local")
 
+# Origines acceptées pour les requêtes non sures (POST/PUT/DELETE/PATCH).
+# Django compare l'en-tête `Origin` du navigateur à l'hôte de la requête : derrière
+# le proxy du tableau de bord, l'hôte vu par Django est le nom du service Compose
+# (`backend:8000`), jamais celui du navigateur. Sans cette liste, toute commande
+# échoue en « Origin checking failed » — la connexion, elle, passe (elle est
+# anonyme, donc dispensée de jeton CSRF).
+CSRF_TRUSTED_ORIGINS = env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    "http://localhost:3001,http://127.0.0.1:3001",
+)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
