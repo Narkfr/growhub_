@@ -71,8 +71,17 @@ services:
       - gateway/backend
     environment:
       DJANGO_SETTINGS_MODULE: growhub.settings
+      # Noms de service Compose : le .env garde `localhost` pour l'outillage de
+      # l'hôte (tests, commandes du venv), qui joint les ports publiés.
+      POSTGRES_HOST: postgres
+      MQTT_BROKER: mqtt-broker
     env_file:
       - .env
+    # Même identité que le broker : les fichiers de comptes et d'ACL qu'il écrit
+    # dans le dossier partagé appartiennent sinon à root (dans le conteneur) et
+    # Mosquitto, qui tourne en ${UID}:${GID}, ne peut plus les relire — il refuse
+    # alors de démarrer au lieu de recharger la configuration.
+    user: "${UID}:${GID}"
     healthcheck:
       test:
         - CMD
@@ -106,8 +115,13 @@ services:
     command: ["python", "gateway/backend/manage.py", "mqtt_bridge"]
     environment:
       DJANGO_SETTINGS_MODULE: growhub.settings
+      POSTGRES_HOST: postgres
+      MQTT_BROKER: mqtt-broker
     env_file:
       - .env
+    # Même raison que pour le backend : c'est le worker qui écrit les comptes
+    # broker et les ACL à l'appairage.
+    user: "${UID}:${GID}"
     volumes:
       - ..:/app
     depends_on:

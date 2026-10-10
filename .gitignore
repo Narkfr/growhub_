@@ -31,3 +31,8 @@ firmware/.micropico
 # MQTT runtime data/logs (never commit broker state)
 gateway/mosquitto/data/
 gateway/mosquitto/log/
+
+# Répétition générale (docker-compose.dryrun.yml)
+gateway/mosquitto/config-dryrun/
+gateway/mosquitto/data-dryrun/
+gateway/mosquitto/log-dryrun/

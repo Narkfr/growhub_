@@ -156,9 +156,7 @@ class DeviceCommandView(APIView):
         device = get_object_or_404(_user_devices(request.user), pk=pk)
         payload = CommandRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        dispatcher = CommandDispatcher(
-            publisher=MqttPublisher(client_id="growhub-backend-cmd")
-        )
+        dispatcher = CommandDispatcher(publisher=MqttPublisher(client_id="gh-cmd"))
         try:
             audit = dispatcher.send(
                 device,

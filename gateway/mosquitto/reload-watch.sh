@@ -31,7 +31,7 @@ last="$(fingerprint)"
 echo "reload-watch: veille sur $CONFIG_DIR ($WATCHED), état initial $last"
 
 while true; do
-  sleep 2
+  sleep 0.5
   current="$(fingerprint)"
   [ "$current" = "$last" ] && continue
   last="$current"

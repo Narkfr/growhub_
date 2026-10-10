@@ -36,7 +36,7 @@ class ProvisioningError(Exception):
 def default_publisher():
     from .mqtt import MqttPublisher
 
-    return MqttPublisher(client_id="growhub-backend-prov")
+    return MqttPublisher(client_id="gh-prov")
 
 
 def devices_awaiting_pairing():
