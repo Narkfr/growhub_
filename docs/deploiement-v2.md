@@ -139,6 +139,15 @@ bascule :
    Django : toutes les routes `/api` répondaient 400 (`DisallowedHost:
    'backend:8000'`) — le tableau de bord était inutilisable derrière le front.
    `DJANGO_ALLOWED_HOSTS` reçoit le nom du service depuis le compose.
+7. **DRF répondait en HTML à un navigateur.** Dès qu'un client annonce préférer
+   `text/html`, DRF choisit son rendu « browsable API » : la connexion réussie
+   *et* les erreurs revenaient en HTML, le SPA échouait à les lire et affichait
+   « Impossible de joindre l'API. » quel que soit le mot de passe — jamais
+   « Identifiants invalides. ». `DEFAULT_RENDERER_CLASSES` se limite maintenant à
+   `JSONRenderer` (ce qui retire aussi un formulaire d'essai exposé sur le LAN).
+   Réflexe de diagnostic : reproduire toute requête du SPA **avec l'en-tête
+   `Accept` d'un navigateur**, jamais avec `curl` seul — c'est ce qui a masqué le
+   défaut pendant les essais.
 
 ## Phase 3 — la bascule (fenêtre courte, Pico en USB)
 
