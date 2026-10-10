@@ -70,7 +70,7 @@ def test_telemetry_history_filters_and_scope(
 
 
 def test_command_endpoint_sends_and_audits(auth_client, device, monkeypatch, publisher):
-    monkeypatch.setattr("telemetry.views.MqttPublisher", lambda **kwargs: publisher)
+    monkeypatch.setattr("telemetry.views.shared_publisher", lambda base: publisher)
 
     response = auth_client.post(
         f"/api/v1/devices/{device.id}/commands",
@@ -94,7 +94,7 @@ def test_command_endpoint_refuses_config_for_members(
     device, other_user, monkeypatch, publisher
 ):
     device.add_member(other_user, role="member")
-    monkeypatch.setattr("telemetry.views.MqttPublisher", lambda **kwargs: publisher)
+    monkeypatch.setattr("telemetry.views.shared_publisher", lambda base: publisher)
     client = APIClient()
     client.force_authenticate(user=other_user)
 
@@ -113,7 +113,7 @@ def test_command_endpoint_reports_broker_outage(auth_client, device, monkeypatch
             raise OSError("connexion refusée")
 
     monkeypatch.setattr(
-        "telemetry.views.MqttPublisher", lambda **kwargs: BrokenPublisher()
+        "telemetry.views.shared_publisher", lambda base: BrokenPublisher()
     )
 
     response = auth_client.post(
@@ -128,7 +128,7 @@ def test_command_endpoint_reports_broker_outage(auth_client, device, monkeypatch
 def test_command_endpoint_is_scoped(
     auth_client, other_user, make_device, monkeypatch, publisher
 ):
-    monkeypatch.setattr("telemetry.views.MqttPublisher", lambda **kwargs: publisher)
+    monkeypatch.setattr("telemetry.views.shared_publisher", lambda base: publisher)
     stranger_device = make_device(device_id="ghb-001122", owner=other_user)
 
     response = auth_client.post(
@@ -209,3 +209,36 @@ def test_telemetry_ordering_is_newest_first(device, user):
     telemetry_message(device, temperature=2.0)
     values = list(Telemetry.objects.values_list("value", flat=True))
     assert values[0] == 2.0
+
+
+def test_three_commands_share_one_mqtt_session(auth_client, device, monkeypatch):
+    """Régression : un publicateur MQTT neuf à chaque commande.
+
+    En production, chaque requête ouvrait sa propre session sous un identifiant
+    client identique : chacune délogeait la précédente, qui se reconnectait
+    aussitôt. Le journal du broker a compté des centaines de connexions par
+    minute, jusqu'à faire rejeter comme malformés les paquets du boîtier.
+    """
+    from telemetry import mqtt
+
+    opened = []
+
+    class CountingPublisher:
+        def __init__(self, client_id=None):
+            opened.append(client_id)
+
+        def publish(self, topic, payload, retain=False, qos=0):
+            return None
+
+    monkeypatch.setattr(mqtt, "_SHARED", {})
+    monkeypatch.setattr(mqtt, "MqttPublisher", CountingPublisher)
+
+    for _ in range(3):
+        response = auth_client.post(
+            f"/api/v1/devices/{device.id}/commands",
+            {"kind": "actuators", "action": "ON", "args": {"target": "WaterPump"}},
+            format="json",
+        )
+        assert response.status_code == 201
+
+    assert opened == ["gh-cmd"], "trois commandes, une seule session"

@@ -34,9 +34,9 @@ class ProvisioningError(Exception):
 
 
 def default_publisher():
-    from .mqtt import MqttPublisher
+    from .mqtt import shared_publisher
 
-    return MqttPublisher(client_id="gh-prov")
+    return shared_publisher("gh-prov")
 
 
 def devices_awaiting_pairing():

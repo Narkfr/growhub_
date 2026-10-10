@@ -38,3 +38,27 @@ def test_publisher_keeps_its_client_id(monkeypatch):
     monkeypatch.setattr("socket.gethostname", lambda: "abcdef123456")
     monkeypatch.setattr(os, "getpid", lambda: 7)
     assert MqttPublisher(client_id="gh-prov").client_id == "gh-prov-abcdef12-7"
+
+
+def test_shared_publisher_opens_a_session_once_per_use(monkeypatch):
+    """Un publicateur par usage et par processus — jamais un par appel.
+
+    La session reste ouverte et se reconnecte toute seule : en créer une à chaque
+    requête faisait que chacune délogeait la précédente, sans fin.
+    """
+    from telemetry import mqtt
+
+    opened = []
+
+    class CountingPublisher:
+        def __init__(self, client_id=None):
+            opened.append(client_id)
+
+    monkeypatch.setattr(mqtt, "_SHARED", {})
+    monkeypatch.setattr(mqtt, "MqttPublisher", CountingPublisher)
+
+    first = mqtt.shared_publisher("gh-cmd")
+    assert mqtt.shared_publisher("gh-cmd") is first
+    mqtt.shared_publisher("gh-prov")
+
+    assert opened == ["gh-cmd", "gh-prov"]
