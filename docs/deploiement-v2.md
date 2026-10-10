@@ -1,0 +1,141 @@
+# Déploiement de la v2 (jalons M7/M8) — runbook
+
+Bascule de la pile Flask + InfluxDB vers Django 5.2 + DRF + PostgreSQL, avec
+appairage des Bourgeons et ACL MQTT par appareil. Ce document est le mode
+opératoire : il doit pouvoir être suivi sans rien redécouvrir.
+
+Décisions prises par Marius le 2026-10-10 :
+
+| Sujet | Décision |
+| :--- | :--- |
+| Sauvegardes | **En local sur le Pi** (`~/growhub_backups`, rotation 7 jours), pas de copie hors machine. |
+| Historique InfluxDB | **Aucune archive conservée.** Le volume n'est pas supprimé pour autant (rien ne se fait avec `down -v`). |
+| Données PostgreSQL v0.1 | Néant : la base `growhub` ne contient aucune table applicative. Rien à migrer. |
+| Écran du Bourgeon | Inchangé : température + humidité (champs par défaut du manifeste). |
+| Tableau de bord | S'ouvrira avec des courbes vides : accepté. |
+| Automatisation ITK | Non portée en v2 pour l'instant. L'ancien `logic_engine.py` n'était lancé nulle part. |
+
+## Ce que la bascule casse, et ce qu'elle ne casse pas
+
+Le firmware v2 change l'identité de l'appareil (`GrowHubClient-xxx` →
+`ghb-xxxxxx`, compte d'amorçage `boot-ghb-xxxxxx`) et le préfixe des topics. Le
+backend v2 n'écoute que `growhub/v1/…` : **entre la bascule de la passerelle et
+l'appairage réussi du boîtier, la télémétrie n'est plus enregistrée.** C'est la
+seule conséquence.
+
+- Le Bourgeon est autonome : il publie, exécute les commandes reçues, et son
+  écran ne dépend pas du réseau. La serre ne s'arrête pas.
+- Aucune automatisation n'est active (l'ancien moteur ITK n'était pas lancé) :
+  il n'y a aucun pilotage d'actionneur à interrompre.
+- Côté PostgreSQL, rien à perdre : la base v0.1 est vide. Côté InfluxDB, rien à
+  garder (décision ci-dessus).
+
+## Phase 0 — préparer (aucun impact sur la machine en service)
+
+Sur la branche `chore/m7-infra`, dans le dépôt :
+
+- `gateway/docker-compose.yml` = pile v2 (postgres, mosquitto, `mqtt-reloader`,
+  backend ASGI, worker `mqtt_bridge`, front). L'ancienne pile est conservée telle
+  quelle dans `gateway/docker-compose.v1.yml`.
+- `gateway/backend/Dockerfile` (Python 3.13 + deps `requirements/common.txt`),
+  `gateway/frontend/Dockerfile` (contexte = racine du dépôt, pour embarquer le
+  paquet partagé `packages/growhub-client`).
+- `gateway/mosquitto/config/mosquitto.conf` déclare `acl_file` ; le contenu de
+  démarrage est le modèle `acl_file.example` (à copier en `acl_file`, ignoré par
+  git).
+- `gateway/mosquitto/reload-watch.sh` + service `mqtt-reloader` : Mosquitto ne
+  relit `password_file`/`acl_file` que sur SIGHUP, ce veilleur envoie le signal
+  dès que le backend réécrit les fichiers.
+- `tools/backup.sh` : `pg_dump` + rotation 7 jours dans `~/growhub_backups`.
+- `gateway/.env.example` à jour (les variables `INFLUXDB_*` restent, elles
+  servent au chemin de retour arrière).
+
+## Phase 1 — sauvegarder
+
+1. `cp gateway/mosquitto/config/acl_file.example gateway/mosquitto/config/acl_file`
+   (si le fichier n'existe pas encore).
+2. `./tools/backup.sh` — la base est vide, mais on veut l'habitude et la
+   preuve que le chemin fonctionne.
+3. **Dumper le Pico** avant tout flash : `mpremote connect /dev/ttyACM0` puis
+   copie de `main.py`, `boot.py`, `config.json`, `constants.py`, `manifest.py`,
+   `secrets.py`, `src/`, `sensors/`, `lib/` vers `~/growhub_backups/pico-v0.1/`.
+   C'est le seul retour arrière qui demande du physique.
+
+## Phase 2 — répétition générale à blanc (la v0.1 continue de tourner)
+
+Monter la pile v2 en parallèle, sur un autre nom de projet et d'autres ports, pour
+ne rien perturber :
+
+```
+docker compose -p growhub_dryrun -f gateway/docker-compose.yml up -d --build \
+  # plus un override qui décale les ports publiés (1884:1883, 3002:3001)
+```
+
+À valider de bout en bout, avec un **Bourgeon simulé** (script publiant sur
+`growhub/v1/<device_id>/telemetry`) :
+
+- `migrate` passe, l'admin répond, `/healthz` répond ;
+- appairage : code affiché → `/pair` dans le tableau de bord → creds livrées ;
+- ingest : les mesures arrivent en base et dans le flux SSE du dashboard ;
+- ACL : un compte d'appareil ne peut ni lire ni écrire sous le préfixe d'un autre
+  (le modèle existe déjà : `tools/mqtt_acl_check.sh`).
+
+C'est aussi le test d'intégration de bout en bout prévu au jalon M8 : il n'existe
+pas encore, il naît ici.
+
+## Phase 3 — la bascule (fenêtre courte, Pico en USB)
+
+1. `docker compose -f gateway/docker-compose.v1.yml stop` — conteneurs
+   conservés, pas supprimés (c'est la moitié du retour arrière).
+2. Vérifier que `password_file` contient bien le compte de service (`growhub_api`)
+   et que `acl_file` existe.
+3. `docker compose -f gateway/docker-compose.yml up -d --build` puis
+   `docker compose exec backend python gateway/backend/manage.py migrate`.
+4. `createsuperuser` (compte de Marius), connexion à `http://<pi>:3001`,
+   vérification de l'admin.
+5. Lire l'identifiant réel du boîtier sur le matériel, puis le provisionner :
+   ```
+   mpremote connect /dev/ttyACM0 exec "import machine, ubinascii; print('ghb-' + ubinascii.hexlify(machine.unique_id()).decode()[-6:])"
+   docker compose exec backend python gateway/backend/manage.py provision_device ghb-xxxxxx \
+       --secrets-path firmware/secrets.py
+   ```
+6. Flasher le boîtier (séquence watchdog de `growhub-pico-deploy`) : `main.py`,
+   `constants.py`, `src/**` (dont `src/display/`), `lib/ssd1306.py`,
+   `manifest.py` **mis à jour en place** (section `display.fields`) et le
+   `secrets.py` produit à l'étape 5. Le boîtier démarre en mode appairage :
+   l'écran affiche `BOURGEON`, le code et l'identifiant.
+7. Appairer dans le tableau de bord (`/pair`), puis vérifier : le boîtier reçoit
+   ses creds, écrit `creds.json`, redémarre, et la télémétrie remonte.
+8. Laisser tourner 15 à 30 minutes : compter les mesures en base, surveiller les
+   `Denied PUBLISH` du broker.
+
+## Phase 4 — retirer l'ancien (après confirmation de la télémétrie)
+
+- `docker compose -f gateway/docker-compose.v1.yml rm -s` des seuls services
+  `api`, `telemetry-logger`, `influxdb`, `adminer` — **jamais `down -v`**.
+- Retirer le bloc « transition v0.1 » de `acl_file`, recharger le broker.
+- Unités systemd vestiges (`growhub-mosquitto`, `growhub-api`,
+  `growhub-dashboard`) : `systemctl --user disable --now`, et surtout **ne pas
+  toucher** à `hermes-gateway.service`.
+- Mettre le cron de sauvegarde en place.
+- Le volume InfluxDB reste en place, inerte, jusqu'à décision explicite.
+
+## Phase 5 — M8 / M9
+
+- Runner GitHub self-hosted sur le Pi + workflow CD : déployer = pousser sur
+  `main`.
+- Test d'intégration de bout en bout (issu de la phase 2) branché en CI.
+- Purge de rétention (`GROWHUB_TELEMETRY_RETENTION_MONTHS`) : la commande
+  n'existe pas encore.
+- CHANGELOG, relecture des dépendances.
+
+## Retour arrière
+
+| Élément | Marche arrière |
+| :--- | :--- |
+| Passerelle | `docker compose -f gateway/docker-compose.v1.yml up -d` : la v0.1 repart sur les mêmes volumes, InfluxDB intact. |
+| Boîtier | Reflash des fichiers sauvegardés en phase 1 (USB, quelques minutes). |
+| Données | Rien à perdre : PostgreSQL était vide, le volume InfluxDB n'est jamais supprimé. |
+| ACL | Restaurer le contenu d'amorçage (`acl_file.example`) et recharger le broker : le compte partagé du boîtier retrouve ses droits. |
+
+Aucun point de non-retour avant la phase 4.
