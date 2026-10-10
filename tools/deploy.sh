@@ -34,23 +34,14 @@ HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/}"
 API_URL="${API_URL:-http://127.0.0.1:3001/api/v1/auth/me}"
 SERVICES=(postgres mqtt-broker mqtt-reloader backend worker frontend)
 
-target="$BRANCH"
-dry_run=0
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --ref) target="${2:?--ref attend un commit ou une branche}"; shift 2 ;;
-        -n|--dry-run) dry_run=1; shift ;;
-        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *) echo "option inconnue : $1" >&2; exit 2 ;;
-    esac
-done
-
 mkdir -p "$STATE_DIR"
 
 # Le script se copie hors du dépôt avant de travailler : un déploiement change la
 # révision du dépôt, donc potentiellement ce fichier même, et bash lit un script au
 # fur et à mesure de son exécution — se faire réécrire en cours de route donne un
-# comportement indéfini.
+# comportement indéfini. Cette recopie précède la lecture des arguments : la
+# relance repasse la ligne de commande telle quelle, et une liste déjà vidée par
+# l'analyse perdrait `--ref` en silence.
 if [ -z "${DEPLOY_STAGED:-}" ]; then
     staged="$STATE_DIR/deploy-$$.sh"
     cp "$0" "$staged"
@@ -68,6 +59,17 @@ trap 'rm -f "$0"' EXIT
 if ! docker info >/dev/null 2>&1 && command -v sg >/dev/null 2>&1; then
     exec sg docker -c "$(printf '%q ' "$0" "$@")"
 fi
+
+target="$BRANCH"
+dry_run=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ref) target="${2:?--ref attend un commit ou une branche}"; shift 2 ;;
+        -n|--dry-run) dry_run=1; shift ;;
+        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "option inconnue : $1" >&2; exit 2 ;;
+    esac
+done
 
 # shellcheck disable=SC2317  # appelée depuis le piège et le chemin d'échec
 log() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOG_FILE"; }
