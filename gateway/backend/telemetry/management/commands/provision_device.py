@@ -55,8 +55,9 @@ class Command(BaseCommand):
         parser.add_argument(
             "--broker",
             help="Adresse du broker telle que le boîtier doit la voir "
-            "(défaut : MQTT_BROKER des réglages, qui est le nom du service Compose "
-            "dans un conteneur — inutilisable depuis un Bourgeon sur le réseau).",
+            "(défaut : GROWHUB_DEVICE_BROKER, qui vaut MQTT_BROKER — dans un "
+            "conteneur c'est le nom du service Compose, inutilisable depuis un "
+            "Bourgeon sur le réseau).",
         )
         parser.add_argument("--port", type=int, help="Port du broker vu du boîtier")
         parser.add_argument(
@@ -109,8 +110,8 @@ class Command(BaseCommand):
             device_id,
             username,
             password,
-            options["broker"] or settings.MQTT_BROKER,
-            options["port"] or settings.MQTT_PORT,
+            options["broker"] or settings.GROWHUB["DEVICE_BROKER"],
+            options["port"] or settings.GROWHUB["DEVICE_BROKER_PORT"],
             code,
         )
         if options["secrets_path"]:

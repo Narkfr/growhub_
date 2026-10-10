@@ -156,6 +156,14 @@ GROWHUB = {
     "MQTT_RELOAD_COMMAND": os.environ.get("GROWHUB_MQTT_RELOAD_COMMAND", ""),
     # How often the SSE stream re-reads the database (seconds).
     "LIVE_POLL_SECONDS": float(os.environ.get("GROWHUB_LIVE_POLL_SECONDS", "2")),
+    # Adresse du broker telle que le *boîtier* doit la voir. Dans un conteneur,
+    # MQTT_BROKER est le nom du service Compose : le Bourgeon, lui, est sur le
+    # réseau et a besoin de l'IP de la passerelle. Ces deux valeurs partent dans
+    # le secrets.py du boîtier et dans le message d'appairage.
+    "DEVICE_BROKER": os.environ.get("GROWHUB_DEVICE_BROKER", MQTT_BROKER),
+    "DEVICE_BROKER_PORT": int(
+        os.environ.get("GROWHUB_DEVICE_BROKER_PORT", str(MQTT_PORT))
+    ),
     # A device with no message for this long is shown as offline.
     "DEVICE_STALE_AFTER_SECONDS": int(
         os.environ.get("GROWHUB_DEVICE_STALE_AFTER", "300")

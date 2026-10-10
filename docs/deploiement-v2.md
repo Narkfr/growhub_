@@ -123,6 +123,23 @@ l'annonce du boîtier ; le compte d'amorçage est révoqué après appairage ;
    firmware, via `is_connected()`), sinon ses premières trames disparaissent sans
    trace. Le veilleur recharge désormais toutes les 0,5 s.
 
+### Ce que la bascule elle-même a appris (2026-10-10)
+
+Deux défauts que la répétition n'avait pas pu montrer, corrigés pendant la
+bascule :
+
+5. **Le message d'appairage transportait `MQTT_BROKER`, donc le nom du service
+   Compose.** Le boîtier a écrit `creds.json` avec `broker: "mqtt-broker"`,
+   intraduisible depuis le réseau : « Échec de connexion MQTT : -2 », en boucle.
+   Le Bourgeon simulé ne lisait pas ce champ, d'où l'angle mort. Les réglages
+   portent maintenant `GROWHUB_DEVICE_BROKER` / `GROWHUB_DEVICE_BROKER_PORT`
+   (l'IP LAN du Pi), utilisés **par les deux** — le `secrets.py` et le message
+   d'appairage.
+6. **Le proxy du tableau de bord réécrit l'en-tête `Host`** par celui du service
+   Django : toutes les routes `/api` répondaient 400 (`DisallowedHost:
+   'backend:8000'`) — le tableau de bord était inutilisable derrière le front.
+   `DJANGO_ALLOWED_HOSTS` reçoit le nom du service depuis le compose.
+
 ## Phase 3 — la bascule (fenêtre courte, Pico en USB)
 
 1. `docker compose -f gateway/docker-compose.v1.yml stop` — conteneurs

@@ -75,6 +75,9 @@ services:
       # l'hôte (tests, commandes du venv), qui joint les ports publiés.
       POSTGRES_HOST: postgres
       MQTT_BROKER: mqtt-broker
+      # Le proxy du tableau de bord réécrit l'en-tête Host par celui du service
+      # Django : sans cette entrée, toutes les requêtes /api renvoient 400.
+      DJANGO_ALLOWED_HOSTS: "backend,${DJANGO_ALLOWED_HOSTS}"
     env_file:
       - .env
     # Même identité que le broker : les fichiers de comptes et d'ACL qu'il écrit
