@@ -51,7 +51,11 @@ def build_live_snapshot(user):
                 "device_id": device.device_id,
                 "name": device.name,
                 "slug": device.slug,
-                "status": device.status,
+                # Statut d'exécution, pas le cycle de vie : le tableau de bord en
+                # déduit « En ligne » / « Hors ligne ». Envoyer `device.status`
+                # (« provisioned ») affichait « Inconnu » sur la carte.
+                "status": state.get("status")
+                or ("online" if device.is_online else "offline"),
                 "is_online": device.is_online,
                 "last_seen": device.last_seen.isoformat() if device.last_seen else None,
                 "site": device.site.name if device.site else None,
