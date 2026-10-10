@@ -30,13 +30,47 @@ export function statusLabel(status: string): string {
   }
 }
 
-/** A device is "fresh" when its last telemetry is recent enough to be trusted. */
+/**
+ * Décalage entre l'horloge du serveur et celle du navigateur (serveur − navigateur).
+ *
+ * Le boîtier date ses mesures à l'heure du serveur ; le tableau de bord juge leur
+ * fraîcheur. Comparer directement les deux montres fait afficher « Sans nouvelles »
+ * alors que les mesures arrivent (VM en retard, machine qui sort de veille, fuseau
+ * mal réglé). On mesure donc le décalage à chaque instantané et on le reporte.
+ */
+let clockSkewMs = 0;
+
+/** Mémorise l'horloge annoncée par le serveur. Sans horloge, on revient à la nôtre. */
+export function noteServerClock(
+  serverNow: string | null | undefined,
+  receivedAt = Date.now(),
+): number {
+  if (!serverNow) {
+    clockSkewMs = 0;
+    return 0;
+  }
+  const server = Date.parse(serverNow);
+  clockSkewMs = Number.isNaN(server) ? 0 : server - receivedAt;
+  return clockSkewMs;
+}
+
+/** Décalage courant, en millisecondes (utilisé par les tests et le diagnostic). */
+export function serverClockSkew(): number {
+  return clockSkewMs;
+}
+
+/**
+ * A device is "fresh" when its last telemetry is recent enough to be trusted.
+ *
+ * `now` est l'heure du navigateur ; le décalage mesuré avec le serveur lui est
+ * appliqué, pour comparer deux horloges comparables.
+ */
 export function isFresh(device: Pick<LiveDevice, 'last_seen'>, now = Date.now()): boolean {
   if (!device.last_seen) return false;
   const seen = Date.parse(device.last_seen);
   if (Number.isNaN(seen)) return false;
   // La télémétrie par défaut est à 30 s : trois intervalles avant de douter.
-  return now - seen < 90_000;
+  return now + clockSkewMs - seen < 90_000;
 }
 
 export function formatMetric(metric: Metric | undefined): string {

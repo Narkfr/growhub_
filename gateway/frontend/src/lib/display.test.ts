@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { LiveDevice } from '@growhub/client';
 
@@ -9,7 +9,9 @@ import {
   formatMetric,
   humanize,
   isFresh,
+  noteServerClock,
   readings,
+  serverClockSkew,
   statusLabel,
 } from './display';
 
@@ -57,6 +59,42 @@ describe('isFresh', () => {
   it('rejects a missing or unparsable date', () => {
     expect(isFresh({ last_seen: null }, now)).toBe(false);
     expect(isFresh({ last_seen: 'pas une date' }, now)).toBe(false);
+  });
+});
+
+describe('horloge du serveur', () => {
+  // Le navigateur est ici en retard de dix minutes sur le serveur.
+  const browserNow = Date.parse('2026-10-09T12:00:00Z');
+  const serverNow = '2026-10-09T12:09:45Z';
+
+  beforeEach(() => noteServerClock(null));
+  afterEach(() => noteServerClock(null));
+
+  it('juge la fraîcheur avec l’heure du serveur, pas celle du navigateur', () => {
+    noteServerClock(serverNow, browserNow);
+
+    // Mesure vieille de quinze secondes selon le serveur, dix minutes selon le
+    // navigateur : le badge doit rester vert. C'est le défaut corrigé.
+    expect(isFresh({ last_seen: '2026-10-09T12:09:30Z' }, browserNow)).toBe(true);
+  });
+
+  it('doute quand le serveur non plus n’a rien reçu', () => {
+    noteServerClock(serverNow, browserNow);
+
+    expect(isFresh({ last_seen: '2026-10-09T11:50:00Z' }, browserNow)).toBe(false);
+  });
+
+  it('mesure le décalage dans les deux sens', () => {
+    expect(noteServerClock('2026-10-09T12:10:00Z', browserNow)).toBe(600_000);
+    expect(noteServerClock('2026-10-09T11:50:00Z', browserNow)).toBe(-600_000);
+  });
+
+  it('retombe sur l’horloge du navigateur si le serveur n’en donne pas', () => {
+    noteServerClock(serverNow, browserNow);
+
+    expect(noteServerClock(undefined)).toBe(0);
+    expect(serverClockSkew()).toBe(0);
+    expect(isFresh({ last_seen: '2026-10-09T11:50:00Z' }, browserNow)).toBe(false);
   });
 });
 

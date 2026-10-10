@@ -86,6 +86,13 @@ export interface Metric {
 export interface LiveSnapshot {
   devices: LiveDevice[];
   count: number;
+  /**
+   * Horloge du serveur au moment de l'instantané. Le tableau de bord s'en sert
+   * pour juger la fraîcheur des mesures : les dater avec l'horloge du navigateur
+   * fait clignoter le badge « Sans nouvelles » quand les deux montres diffèrent.
+   * Absent d'un serveur plus ancien — le client retombe alors sur son horloge.
+   */
+  now?: string;
 }
 
 export interface TelemetryPoint {

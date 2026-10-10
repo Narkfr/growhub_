@@ -6,6 +6,7 @@ import type { LiveSnapshot, User } from '@growhub/client';
 import { GrowHubError } from '@growhub/client';
 
 import { apiClient } from '@/lib/client';
+import { noteServerClock } from '@/lib/display';
 
 /** Message affichable pour n'importe quelle erreur remontée par le client. */
 export function messageOf(error: unknown): string {
@@ -28,6 +29,10 @@ export function useLiveState() {
   useEffect(() => {
     return apiClient().subscribeLive(
       (next) => {
+        // L'horloge du serveur arrive avec chaque instantané : c'est elle qui fait
+        // foi pour juger la fraîcheur des mesures, pas celle de la machine qui
+        // regarde l'écran.
+        noteServerClock(next.now);
         setSnapshot(next);
         setConnected(true);
         setError(null);

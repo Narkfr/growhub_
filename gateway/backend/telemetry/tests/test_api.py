@@ -2,6 +2,8 @@ import asyncio
 import json
 
 import pytest
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.test import APIClient
 from telemetry.models import CommandAudit, Telemetry
 from telemetry.services import handle_message, record_status
@@ -242,3 +244,20 @@ def test_three_commands_share_one_mqtt_session(auth_client, device, monkeypatch)
         assert response.status_code == 201
 
     assert opened == ["gh-cmd"], "trois commandes, une seule session"
+
+
+def test_live_snapshot_carries_the_server_clock(user):
+    """Le tableau de bord juge la fraîcheur sur l'heure du serveur, pas la sienne.
+
+    `last_seen` est daté par le serveur : le comparer à l'horloge du navigateur
+    fait clignoter le badge « Sans nouvelles » dès que les deux montres diffèrent
+    — et deux montres diffèrent toujours un peu. L'instantané doit donc annoncer
+    l'heure du serveur, que le client prend comme référence.
+    """
+    before = timezone.now()
+    snapshot = build_live_snapshot(user)
+    after = timezone.now()
+
+    served = parse_datetime(snapshot["now"])
+    assert served is not None
+    assert before <= served <= after
