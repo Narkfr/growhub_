@@ -101,7 +101,15 @@ def failing_publisher():
 
 @pytest.fixture(autouse=True)
 def no_real_mqtt(monkeypatch, publisher):
-    """No test ever opens a socket to a broker: every publisher is the fake one."""
+    """No test ever opens a socket to a broker: every publisher is the fake one.
+
+    Le cache des publicateurs partagés est vidé à chaque test : sans cela, le
+    faux publicateur fabriqué pour un test serait réutilisé par le suivant, et
+    les messages observés viendraient du mauvais test.
+    """
+    from telemetry import mqtt
+
+    monkeypatch.setattr(mqtt, "_SHARED", {})
     monkeypatch.setattr("telemetry.mqtt.MqttPublisher", lambda **kwargs: publisher)
     return publisher
 

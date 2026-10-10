@@ -90,3 +90,22 @@ def build_worker_client(client_id="growhub-worker"):
     if settings.MQTT_USER:
         client.username_pw_set(settings.MQTT_USER, settings.MQTT_PASSWORD)
     return client
+
+
+_SHARED: dict[str, MqttPublisher] = {}
+
+
+def shared_publisher(base):
+    """Le publicateur du processus, un par usage — jamais un par requête.
+
+    Un `MqttPublisher` ouvre une session MQTT et la garde ouverte (`loop_start`
+    le fait se reconnecter tout seul). Comme tous ceux d'un même processus
+    portent le même identifiant client, en créer un par requête HTTP fait que
+    chacun déloge le précédent, qui se reconnecte et redéloge le suivant : une
+    tempête de connexions. Constaté en production — des centaines par minute —
+    jusqu'à faire trébucher la liaison du boîtier, qui publiait alors des paquets
+    que le broker rejetait (`malformed packet`).
+    """
+    if base not in _SHARED:
+        _SHARED[base] = MqttPublisher(client_id=base)
+    return _SHARED[base]

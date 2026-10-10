@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from . import provisioning
 from .models import CommandAudit, Telemetry
-from .mqtt import MqttPublisher
+from .mqtt import shared_publisher
 from .provisioning import ProvisioningError
 from .serializers import (
     CommandAuditSerializer,
@@ -167,7 +167,7 @@ class DeviceCommandView(APIView):
         device = get_object_or_404(_user_devices(request.user), pk=pk)
         payload = CommandRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        dispatcher = CommandDispatcher(publisher=MqttPublisher(client_id="gh-cmd"))
+        dispatcher = CommandDispatcher(publisher=shared_publisher("gh-cmd"))
         try:
             audit = dispatcher.send(
                 device,
