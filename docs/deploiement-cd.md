@@ -110,6 +110,11 @@ code : les secrets et les données restent sur la machine et hors de git.
 - La construction prend quelques minutes sur le Pi (le tableau de bord est la
   partie lente). Ce n'est pas une file d'attente bloquante : `concurrency` ne
   laisse qu'un déploiement à la fois et n'annule jamais celui en cours.
+- La copie de production est le dépôt dans lequel on travaille : un merge fait
+  depuis cette machine la fait avancer d'elle-même, et le déploiement qui suit
+  écrit alors « rien à déployer » — le contrôle de santé est quand même joué. Un
+  merge fait depuis GitHub (ou d'une autre machine) déclenche, lui, le vrai
+  travail : récupération, bascule, reconstruction, migration.
 - Un déploiement interrompt brièvement les services recréés ; l'ingestion MQTT
   reprend au redémarrage du worker. Les mesures du boîtier pendant cette fenêtre
   sont perdues (QoS 0, pas de file d'attente côté serveur).
