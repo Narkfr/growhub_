@@ -46,6 +46,29 @@ while [ $# -gt 0 ]; do
 done
 
 mkdir -p "$STATE_DIR"
+
+# Le script se copie hors du dépôt avant de travailler : un déploiement change la
+# révision du dépôt, donc potentiellement ce fichier même, et bash lit un script au
+# fur et à mesure de son exécution — se faire réécrire en cours de route donne un
+# comportement indéfini.
+if [ -z "${DEPLOY_STAGED:-}" ]; then
+    staged="$STATE_DIR/deploy-$$.sh"
+    cp "$0" "$staged"
+    chmod +x "$staged"
+    export DEPLOY_STAGED=1
+    exec "$staged" "$@"
+fi
+trap 'rm -f "$0"' EXIT
+
+# Le runner GitHub tourne en service utilisateur : il hérite de tous les groupes de
+# l'utilisateur sauf `docker` (le gestionnaire de session ne reprend pas un groupe
+# ajouté après son démarrage), et tout appel à `docker compose` échoue alors sur
+# « permission denied … /var/run/docker.sock ». `sg` reprend le groupe le temps du
+# déploiement, sans privilège supplémentaire — l'utilisateur en est déjà membre.
+if ! docker info >/dev/null 2>&1 && command -v sg >/dev/null 2>&1; then
+    exec sg docker -c "$(printf '%q ' "$0" "$@")"
+fi
+
 # shellcheck disable=SC2317  # appelée depuis le piège et le chemin d'échec
 log() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOG_FILE"; }
 
@@ -133,8 +156,10 @@ fi
 resolved="$(git_at rev-parse "$target")"
 
 log "=== déploiement demandé : $target ($resolved), révision en place : $(git_at rev-parse --short "$previous") ==="
+deployed=1
 if [ "$resolved" = "$previous" ]; then
-    log "rien à faire : la révision demandée est déjà en place"
+    log "rien à déployer : la révision demandée est déjà en place"
+    deployed=0
 else
     if [ "$dry_run" = "1" ]; then
         log "mode simulation : rien n'a été touché"
@@ -144,9 +169,15 @@ else
 fi
 
 if expected_health; then
-    printf '%s\n' "$previous" > "$STATE_FILE"
+    [ "$deployed" = "1" ] && printf '%s\n' "$previous" > "$STATE_FILE"
     log "déploiement réussi : $(git_at rev-parse --short HEAD) en place (état précédent conservé dans $STATE_FILE)"
     exit 0
+fi
+
+if [ "$deployed" = "0" ]; then
+    # Rien n'a été déployé : il n'y a rien à défaire, la pile était déjà malade.
+    log "contrôle de santé en échec alors que rien n'a été déployé — la pile demande un regard humain"
+    exit 1
 fi
 
 log "contrôle de santé en échec — retour arrière vers $(git_at rev-parse --short "$previous")"
