@@ -27,7 +27,7 @@ le travail se fait dans une branche par jalon, `hermes` reste la branche d'inté
 - [x] **M4** — appairage Bourgeon : `/claim`, ACL, provisioning des creds
 - [x] **M5** — firmware v2 : `device_id` = `machine.unique_id()`, topic `info`, topic de config, code d'appairage à l'écran
 - [x] **M6** — front Next : login, liste des Bourgeons, partage, dashboard live
-- [ ] **M7** — infra : retrait de Flask / InfluxDB / Adminer, compose et unités systemd revus, sauvegardes
+- [x] **M7** — infra : retrait de Flask / InfluxDB / Adminer, compose et unités systemd revus, sauvegardes
 - [ ] **M8** — CI/CD : runner self-hosted, jobs build + deploy, runbook et rollback
 - [ ] **M9** — documentation finale, CHANGELOG, dépendances à jour
 
@@ -47,6 +47,18 @@ il n'ajoute donc pas de tag.
 
 ## Journal
 
+- **2026-10-10 — M7** : bascule de la v2 en production, sur le vrai matériel. Pile v2 dans
+  `gateway/docker-compose.yml` (postgres, mosquitto, `mqtt-reloader`, backend ASGI, worker, front),
+  l'ancienne conservée dans `docker-compose.v1.yml` ; ses quatre conteneurs retirés après vérification,
+  ses images gardées comme retour arrière. Le Bourgeon `ghb-29442c` a été reflashé et appairé, son écran
+  est décrit par le manifeste. La répétition générale à blanc puis la bascule ont mis au jour **six
+  défauts qu'aucun test ne pouvait voir**, tous corrigés : droits des fichiers du broker (Mosquitto
+  s'arrêtait au lieu de recharger), identifiant client MQTT partagé par deux processus (déconnexions en
+  boucle), adresse du broker livrée au boîtier dans le message d'appairage, `ALLOWED_HOSTS` et origines
+  CSRF du proxy, flux temps réel recompressé (mesures en direct figées), et les deux vocabulaires de
+  statut confondus (« Inconnu » sur la carte). Sauvegarde `pg_dump` quotidienne, rotation 7 jours.
+  Runbook : `docs/deploiement-v2.md`. Reste connu : le broker déconnecte le boîtier (`malformed packet`
+  toutes les 30 à 60 s) — publications concurrentes à sérialiser côté firmware, jalon à part.
 - **2026-10-09 — M0** : `hermes` (36 commits) mergée dans `main` en `--no-ff` (`fdee1c6`), tag annoté `v0.1` poussé. CI relancée sur `main`.
 - **2026-10-09 — M1** : conception écrite (architecture, contrat MQTT, flux d'appairage, 5 ADR).
 - **2026-10-09 — M6** : paquet partagé `@growhub/client` (types alignés sur les sérialiseurs DRF,

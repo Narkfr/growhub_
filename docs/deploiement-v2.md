@@ -191,6 +191,14 @@ bascule :
 - Mettre le cron de sauvegarde en place.
 - Le volume InfluxDB reste en place, inerte, jusqu'à décision explicite.
 
+**Exécuté le 2026-10-10** : les quatre conteneurs retirés (`docker rm` sur les noms,
+sans passer par le compose v0.1 pour ne rien risquer d'autre), **images conservées**
+(~1 Go) comme retour arrière — elles sont reconstructibles depuis le dépôt au tag
+`v0.1` si on veut récupérer la place. Le bloc « transition v0.1 » de `acl_file` a
+disparu de lui-même : le backend réécrit ce fichier en entier au premier appairage.
+Les trois unités systemd étaient déjà `disabled`, rien ne les démarre. Sauvegarde
+quotidienne en place (03 h 30, rotation 7 jours, testée avec un `PATH` minimal).
+
 ## Phase 5 — M8 / M9
 
 - Runner GitHub self-hosted sur le Pi + workflow CD : déployer = pousser sur
