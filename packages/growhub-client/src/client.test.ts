@@ -66,6 +66,33 @@ describe('GrowHubClient requests', () => {
     expect(recorder.last.init.credentials).toBe('include');
   });
 
+  it('appelle le fetch global sans lui imposer notre instance comme récepteur', async () => {
+    // Dans un navigateur, `fetch` est une fonction native de `window` : appelée
+    // comme méthode d'un autre objet, elle lève « Illegal invocation » *avant*
+    // toute requête. Le tableau de bord affichait alors « Impossible de joindre
+    // l'API. » sans qu'aucune requête ne parte. Un `fetch` bouchonné, lui, est
+    // insensible au récepteur — d'où le test explicite ci-dessous.
+    const receivers: unknown[] = [];
+    vi.stubGlobal('fetch', function (this: unknown) {
+      // eslint-disable-next-line prefer-rest-params
+      receivers.push(this);
+      return Promise.resolve(jsonResponse(200, { username: 'marius' }));
+    });
+
+    try {
+      const client = new GrowHubClient({
+        baseUrl: 'http://api.test',
+        csrfToken: () => null,
+      });
+      await client.login('marius', 'secret');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(receivers).toHaveLength(1);
+    expect(receivers[0]).not.toBeInstanceOf(GrowHubClient);
+  });
+
   it('sends the CSRF token on unsafe methods but not on GET', async () => {
     const recorder = new Recorder(() => jsonResponse(200, {}));
     const client = clientWith(recorder, 'csrf-123');
